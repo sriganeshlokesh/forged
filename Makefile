@@ -23,7 +23,7 @@ build:
 		-o bin/forged ./cmd
 
 run:
-	go run ./cmd
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; go run ./cmd
 
 wire:
 	go tool wire ./adapter/dependency/
