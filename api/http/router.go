@@ -14,7 +14,7 @@ import (
 // NewRouter constructs a chi router with the standard middleware stack and all routes registered.
 // Middleware order: RequestID → RealIP → RequestLogger → Recoverer.
 // RequestLogger is placed before Recoverer so that panics are logged as 500s with full duration.
-func NewRouter(logger *slog.Logger, health *handle.HealthHandler) http.Handler {
+func NewRouter(logger *slog.Logger, health *handle.HealthHandler, eval *handle.EvaluationHandler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
@@ -23,6 +23,7 @@ func NewRouter(logger *slog.Logger, health *handle.HealthHandler) http.Handler {
 	r.Use(chimw.Recoverer)
 
 	r.Get("/health", health.Health)
+	r.Post("/v1/evaluations", eval.Evaluate)
 
 	return r
 }
