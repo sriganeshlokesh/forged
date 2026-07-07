@@ -8,12 +8,10 @@ package dependency
 
 import (
 	"github.com/google/wire"
-	"github.com/sriganeshlokesh/forged/adapter/evaluator/stub"
 	http2 "github.com/sriganeshlokesh/forged/api/http"
 	"github.com/sriganeshlokesh/forged/api/http/handle"
 	"github.com/sriganeshlokesh/forged/application/evaluation"
 	"github.com/sriganeshlokesh/forged/config"
-	"github.com/sriganeshlokesh/forged/domain/service"
 	"log/slog"
 	"net/http"
 )
@@ -24,8 +22,8 @@ import (
 // wire.Build is replaced by generated code in wire_gen.go.
 func InitializeServer(cfg *config.Config, logger *slog.Logger) *http.Server {
 	healthHandler := handle.NewHealthHandler(cfg)
-	stubEvaluator := stub.NewStubEvaluator()
-	useCase := evaluation.NewUseCase(stubEvaluator)
+	iResumeEvaluator := ProvideEvaluator(cfg, logger)
+	useCase := evaluation.NewUseCase(iResumeEvaluator)
 	evaluationHandler := handle.NewEvaluationHandler(useCase, logger)
 	handler := http2.NewRouter(logger, healthHandler, evaluationHandler)
 	server := http2.NewServer(cfg, handler, logger)
@@ -35,4 +33,4 @@ func InitializeServer(cfg *config.Config, logger *slog.Logger) *http.Server {
 // wire.go:
 
 // ServerSet groups the providers needed to build an *http.Server.
-var ServerSet = wire.NewSet(handle.NewHealthHandler, handle.NewEvaluationHandler, evaluation.NewUseCase, stub.NewStubEvaluator, wire.Bind(new(service.IResumeEvaluator), new(*stub.StubEvaluator)), http2.NewRouter, http2.NewServer)
+var ServerSet = wire.NewSet(handle.NewHealthHandler, handle.NewEvaluationHandler, evaluation.NewUseCase, ProvideEvaluator, http2.NewRouter, http2.NewServer)

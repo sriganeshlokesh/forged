@@ -38,6 +38,10 @@ curl -s localhost:8080/health
 | `HTTP_WRITE_TIMEOUT` | `30s` | HTTP server write timeout |
 | `HTTP_IDLE_TIMEOUT` | `120s` | HTTP server idle connection timeout |
 | `SHUTDOWN_TIMEOUT` | `5s` | Graceful shutdown timeout after SIGTERM |
+| `LLM_BASE_URL` | `https://api.groq.com/openai/v1` | OpenAI-compatible chat-completions endpoint (Groq, Hugging Face router, local Ollama) |
+| `LLM_API_KEY` | *(empty)* | API key for the LLM endpoint; when empty the stub evaluator is used |
+| `LLM_MODEL` | `llama-3.3-70b-versatile` | Model name at the LLM endpoint |
+| `LLM_TIMEOUT` | `60s` | Per-request timeout for LLM calls |
 
 ## Docker
 

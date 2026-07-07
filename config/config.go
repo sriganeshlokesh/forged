@@ -21,6 +21,14 @@ type Config struct {
 	IdleTimeout     time.Duration
 	ShutdownTimeout time.Duration
 	Version         string
+
+	// LLM evaluator settings. Any OpenAI-compatible chat-completions
+	// endpoint works (Groq, Hugging Face router, local Ollama).
+	// An empty LLMAPIKey selects the stub evaluator.
+	LLMBaseURL string
+	LLMAPIKey  string
+	LLMModel   string
+	LLMTimeout time.Duration
 }
 
 // Load reads configuration from environment variables, applying defaults for any unset values.
@@ -47,6 +55,10 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	llmTimeout, err := parseDuration("LLM_TIMEOUT", "60s")
+	if err != nil {
+		return nil, err
+	}
 
 	return &Config{
 		ServiceName:     getEnv("SERVICE_NAME", "forged"),
@@ -58,6 +70,10 @@ func Load() (*Config, error) {
 		IdleTimeout:     idleTimeout,
 		ShutdownTimeout: shutdownTimeout,
 		Version:         Version,
+		LLMBaseURL:      getEnv("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
+		LLMAPIKey:       getEnv("LLM_API_KEY", ""),
+		LLMModel:        getEnv("LLM_MODEL", "llama-3.3-70b-versatile"),
+		LLMTimeout:      llmTimeout,
 	}, nil
 }
 

@@ -130,10 +130,53 @@ func (r *ResumeDTO) ToModel() *model.Resume {
 
 // EvaluationResponse is the JSON response body for POST /v1/evaluations.
 type EvaluationResponse struct {
-	Status      string   `json:"status"`
-	Score       int      `json:"score"`
-	Summary     string   `json:"summary"`
-	Suggestions []string `json:"suggestions"`
+	Status      string         `json:"status"`
+	Score       int            `json:"score"`
+	Summary     string         `json:"summary"`
+	Dimensions  []DimensionDTO `json:"dimensions"`
+	Strengths   []string       `json:"strengths"`
+	Gaps        []string       `json:"gaps"`
+	Suggestions []string       `json:"suggestions"`
+}
+
+// DimensionDTO is one scored rubric axis in an evaluation response.
+type DimensionDTO struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Score    int    `json:"score"`
+	Max      int    `json:"max"`
+	Evidence string `json:"evidence"`
+}
+
+// NewEvaluationResponse maps a domain evaluation into the response DTO,
+// normalizing nil slices to empty ones so JSON emits [] instead of null.
+func NewEvaluationResponse(status string, e *model.Evaluation) EvaluationResponse {
+	resp := EvaluationResponse{
+		Status:      status,
+		Score:       e.Score,
+		Summary:     e.Summary,
+		Dimensions:  make([]DimensionDTO, 0, len(e.Dimensions)),
+		Strengths:   emptyIfNil(e.Strengths),
+		Gaps:        emptyIfNil(e.Gaps),
+		Suggestions: emptyIfNil(e.Suggestions),
+	}
+	for _, d := range e.Dimensions {
+		resp.Dimensions = append(resp.Dimensions, DimensionDTO{
+			Key:      d.Key,
+			Label:    d.Label,
+			Score:    d.Score,
+			Max:      d.Max,
+			Evidence: d.Evidence,
+		})
+	}
+	return resp
+}
+
+func emptyIfNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // ErrorResponse is the error envelope used by all API error responses.

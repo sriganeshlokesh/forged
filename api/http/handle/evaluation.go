@@ -43,26 +43,25 @@ func (h *EvaluationHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 
 	out, err := h.uc.Execute(r.Context(), in)
 	if err != nil {
-		if errors.Is(err, model.ErrEmptyJobDescription) || errors.Is(err, model.ErrEmptyResume) {
+		switch {
+		case errors.Is(err, model.ErrEmptyJobDescription) || errors.Is(err, model.ErrEmptyResume):
 			writeError(w, &error_code.Error{
 				Code: error_code.ErrValidation.Code,
 				Msg:  err.Error(),
 				HTTP: error_code.ErrValidation.HTTP,
 			})
-			return
+		case errors.Is(err, model.ErrEvaluationFailed):
+			h.logger.ErrorContext(r.Context(), "evaluation backend failed", slog.String("error", err.Error()))
+			writeError(w, error_code.ErrEvaluation)
+		default:
+			h.logger.ErrorContext(r.Context(), "evaluation failed", slog.String("error", err.Error()))
+			writeError(w, error_code.ErrInternal)
 		}
-		h.logger.ErrorContext(r.Context(), "evaluation failed", slog.String("error", err.Error()))
-		writeError(w, error_code.ErrInternal)
 		return
 	}
 
 	result := out.(*evaluation.Output)
-	writeJSON(w, http.StatusOK, dto.EvaluationResponse{
-		Status:      out.GetStatus(),
-		Score:       result.Evaluation.Score,
-		Summary:     result.Evaluation.Summary,
-		Suggestions: result.Evaluation.Suggestions,
-	})
+	writeJSON(w, http.StatusOK, dto.NewEvaluationResponse(out.GetStatus(), result.Evaluation))
 }
 
 // writeJSON encodes v as JSON and writes it with the given HTTP status code.

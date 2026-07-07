@@ -31,4 +31,5 @@ var (
 	ErrInvalidParams = New(10001, "invalid params", 400)
 	ErrValidation    = New(10002, "validation failed", 400)
 	ErrInternal      = New(30001, "internal error", 500)
+	ErrEvaluation    = New(30002, "evaluation service unavailable", 503)
 )

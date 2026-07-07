@@ -14,12 +14,10 @@ import (
 
 	"github.com/google/wire"
 
-	evstub "github.com/sriganeshlokesh/forged/adapter/evaluator/stub"
 	apihttp "github.com/sriganeshlokesh/forged/api/http"
 	"github.com/sriganeshlokesh/forged/api/http/handle"
 	"github.com/sriganeshlokesh/forged/application/evaluation"
 	"github.com/sriganeshlokesh/forged/config"
-	"github.com/sriganeshlokesh/forged/domain/service"
 )
 
 // ServerSet groups the providers needed to build an *http.Server.
@@ -27,8 +25,7 @@ var ServerSet = wire.NewSet(
 	handle.NewHealthHandler,
 	handle.NewEvaluationHandler,
 	evaluation.NewUseCase,
-	evstub.NewStubEvaluator,
-	wire.Bind(new(service.IResumeEvaluator), new(*evstub.StubEvaluator)),
+	ProvideEvaluator,
 	apihttp.NewRouter,
 	apihttp.NewServer,
 )

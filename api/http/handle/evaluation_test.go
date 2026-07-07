@@ -21,8 +21,13 @@ type fakeEval struct{}
 
 func (f *fakeEval) Evaluate(_ context.Context, _ string, _ *model.Resume) (*model.Evaluation, error) {
 	return &model.Evaluation{
-		Score:       0,
-		Summary:     "stub",
+		Score:   42,
+		Summary: "stub",
+		Dimensions: []model.Dimension{
+			{Key: "skills_match", Label: "Skills match", Score: 42, Max: 35, Evidence: "Go"},
+		},
+		Strengths:   []string{"s"},
+		Gaps:        []string{"g"},
 		Suggestions: []string{},
 	}, nil
 }
@@ -121,6 +126,12 @@ func TestEvaluationHandler_Evaluate(t *testing.T) {
 			}
 			if evalResp.Suggestions == nil {
 				t.Error("expected Suggestions to be non-nil slice")
+			}
+			if len(evalResp.Dimensions) != 1 || evalResp.Dimensions[0].Key != "skills_match" {
+				t.Errorf("expected one skills_match dimension, got %+v", evalResp.Dimensions)
+			}
+			if evalResp.Strengths == nil || evalResp.Gaps == nil {
+				t.Error("expected Strengths and Gaps to be non-nil slices")
 			}
 		})
 	}
