@@ -1,0 +1,8 @@
+.git
+.github/
+bin/
+coverage.out
+*.md
+Makefile
+railway.toml
+.golangci.yml
