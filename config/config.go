@@ -29,6 +29,10 @@ type Config struct {
 	LLMAPIKey  string
 	LLMModel   string
 	LLMTimeout time.Duration
+
+	// RateLimitPerIPRPM caps requests per minute per client IP on the
+	// evaluations endpoint. 0 disables rate limiting.
+	RateLimitPerIPRPM int
 }
 
 // Load reads configuration from environment variables, applying defaults for any unset values.
@@ -59,21 +63,27 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	rateLimitRPM := getEnv("RATE_LIMIT_PER_IP_RPM", "10")
+	rpm, err := strconv.Atoi(rateLimitRPM)
+	if err != nil || rpm < 0 {
+		return nil, fmt.Errorf("RATE_LIMIT_PER_IP_RPM must be a non-negative integer, got %q", rateLimitRPM)
+	}
 
 	return &Config{
-		ServiceName:     getEnv("SERVICE_NAME", "forged"),
-		Env:             getEnv("APP_ENV", "development"),
-		Port:            port,
-		LogLevel:        getEnv("LOG_LEVEL", "info"),
-		ReadTimeout:     readTimeout,
-		WriteTimeout:    writeTimeout,
-		IdleTimeout:     idleTimeout,
-		ShutdownTimeout: shutdownTimeout,
-		Version:         Version,
-		LLMBaseURL:      getEnv("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
-		LLMAPIKey:       getEnv("LLM_API_KEY", ""),
-		LLMModel:        getEnv("LLM_MODEL", "llama-3.3-70b-versatile"),
-		LLMTimeout:      llmTimeout,
+		ServiceName:       getEnv("SERVICE_NAME", "forged"),
+		Env:               getEnv("APP_ENV", "development"),
+		Port:              port,
+		LogLevel:          getEnv("LOG_LEVEL", "info"),
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+		ShutdownTimeout:   shutdownTimeout,
+		Version:           Version,
+		LLMBaseURL:        getEnv("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
+		LLMAPIKey:         getEnv("LLM_API_KEY", ""),
+		LLMModel:          getEnv("LLM_MODEL", "llama-3.3-70b-versatile"),
+		LLMTimeout:        llmTimeout,
+		RateLimitPerIPRPM: rpm,
 	}, nil
 }
 

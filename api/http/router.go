@@ -8,6 +8,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/sriganeshlokesh/forged/api/http/middleware"
+	"github.com/sriganeshlokesh/forged/config"
 )
 
 // HealthRoutes is what the router needs from the health handler.
@@ -25,7 +26,7 @@ type EvaluationRoutes interface {
 // NewRouter constructs a chi router with the standard middleware stack and all routes registered.
 // Middleware order: RequestID → RealIP → RequestLogger → Recoverer.
 // RequestLogger is placed before Recoverer so that panics are logged as 500s with full duration.
-func NewRouter(logger *slog.Logger, health HealthRoutes, eval EvaluationRoutes) http.Handler {
+func NewRouter(cfg *config.Config, logger *slog.Logger, health HealthRoutes, eval EvaluationRoutes) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
@@ -33,8 +34,10 @@ func NewRouter(logger *slog.Logger, health HealthRoutes, eval EvaluationRoutes) 
 	r.Use(middleware.RequestLogger(logger))
 	r.Use(chimw.Recoverer)
 
+	// /health stays outside the rate limiter — Railway healthchecks must never 429.
 	r.Get("/health", health.Health)
-	r.Post("/v1/evaluations", eval.Evaluate)
+	r.With(middleware.RateLimitPerIP(cfg.RateLimitPerIPRPM)).
+		Post("/v1/evaluations", eval.Evaluate)
 
 	return r
 }

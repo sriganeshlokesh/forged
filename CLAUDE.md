@@ -26,7 +26,7 @@ Strict inward-only imports. No exceptions except where noted.
 | domain      | `domain/`      | stdlib, other `domain/*`                     | application, adapter, api, config, any third-party lib |
 | application | `application/` | domain, stdlib                               | adapter, api                 |
 | adapter     | `adapter/`     | application, domain, config, infra libraries | api (sole exception: `adapter/dependency`) |
-| api         | `api/`         | application, domain, config, chi             | adapter                      |
+| api         | `api/`         | application, domain, config, chi (+ chi ecosystem, e.g. httprate) | adapter                      |
 | cmd         | `cmd/`         | config, util, adapter/dependency             | business logic (stays thin)  |
 
 `adapter/dependency` is the composition root — the **only** place that may import both adapter and api packages simultaneously.

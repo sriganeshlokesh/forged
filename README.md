@@ -42,6 +42,7 @@ curl -s localhost:8080/health
 | `LLM_API_KEY` | *(empty)* | API key for the LLM endpoint; when empty the stub evaluator is used |
 | `LLM_MODEL` | `llama-3.3-70b-versatile` | Model name at the LLM endpoint |
 | `LLM_TIMEOUT` | `60s` | Per-request timeout for LLM calls |
+| `RATE_LIMIT_PER_IP_RPM` | `10` | Max requests/minute per client IP on `/v1/evaluations` (`0` disables) |
 
 ## Docker
 

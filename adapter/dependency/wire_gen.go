@@ -25,7 +25,7 @@ func InitializeServer(cfg *config.Config, logger *slog.Logger) *http.Server {
 	resumeEvaluator := ProvideEvaluator(cfg, logger)
 	useCase := evaluation.NewUseCase(resumeEvaluator)
 	evaluationHandler := handle.NewEvaluationHandler(useCase, logger)
-	handler := http2.NewRouter(logger, healthHandler, evaluationHandler)
+	handler := http2.NewRouter(cfg, logger, healthHandler, evaluationHandler)
 	server := http2.NewServer(cfg, handler, logger)
 	return server
 }
