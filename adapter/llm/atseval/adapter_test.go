@@ -2,48 +2,47 @@ package atseval_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
+
 	llmats "github.com/sriganeshlokesh/forged/adapter/llm/atseval"
+	"github.com/sriganeshlokesh/forged/adapter/llm/atseval/mocks"
 	"github.com/sriganeshlokesh/forged/domain/model"
 	"github.com/sriganeshlokesh/forged/pkg/atseval"
 )
 
-func fakeServer(t *testing.T, status int, content string) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(status)
-		body, _ := json.Marshal(map[string]any{
-			"choices": []map[string]any{{"message": map[string]any{"content": content}}},
-		})
-		_, _ = w.Write(body)
-	}))
-}
-
 func TestAdapter_Evaluate_MapsDomainTypes(t *testing.T) {
-	srv := fakeServer(t, http.StatusOK, `{
-		"score": 40, "summary": "ok",
-		"dimensions": [{"key": "skills_match", "label": "Skills match", "score": 40, "max": 35, "evidence": "Go"}],
-		"strengths": ["s"], "gaps": ["g"], "suggestions": ["fix"]
-	}`)
-	defer srv.Close()
+	engine := mocks.NewMockEngine(t)
+	engine.EXPECT().
+		Evaluate(mock.Anything, "Go engineer", mock.MatchedBy(func(r atseval.Resume) bool {
+			return r.Summary == "<p>dev</p>" &&
+				len(r.Experience) == 1 && r.Experience[0].Company == "Acme" &&
+				len(r.SkillGroups) == 1 && r.SkillGroups[0].Items[0] == "Go"
+		})).
+		Return(&atseval.Evaluation{
+			Score:   35,
+			Summary: "ok",
+			Dimensions: []atseval.Dimension{
+				{Key: "skills_match", Label: "Skills match", Score: 35, Max: 35, Evidence: "Go"},
+			},
+			Strengths:   []string{"s"},
+			Gaps:        []string{"g"},
+			Suggestions: []string{"fix"},
+		}, nil)
 
-	engine := atseval.New(atseval.Options{BaseURL: srv.URL, APIKey: "k", Model: "m"})
 	a := llmats.New(engine, slog.Default())
-
 	eval, err := a.Evaluate(context.Background(), "Go engineer", &model.Resume{
-		Summary:    "<p>dev</p>",
-		Experience: []model.Experience{{Company: "Acme", Role: "SWE", Bullets: "<ul><li>x</li></ul>"}},
+		Summary:     "<p>dev</p>",
+		Experience:  []model.Experience{{Company: "Acme", Role: "SWE", Bullets: "<ul><li>x</li></ul>"}},
+		SkillGroups: []model.SkillGroup{{Label: "Languages", Items: []string{"Go"}}},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if eval.Score != 35 { // clamped to dimension max
+	if eval.Score != 35 {
 		t.Errorf("expected score 35, got %d", eval.Score)
 	}
 	if len(eval.Dimensions) != 1 || eval.Dimensions[0].Key != "skills_match" {
@@ -55,12 +54,12 @@ func TestAdapter_Evaluate_MapsDomainTypes(t *testing.T) {
 }
 
 func TestAdapter_Evaluate_WrapsFailures(t *testing.T) {
-	srv := fakeServer(t, http.StatusInternalServerError, "boom")
-	defer srv.Close()
+	engine := mocks.NewMockEngine(t)
+	engine.EXPECT().
+		Evaluate(mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, errors.New("boom"))
 
-	engine := atseval.New(atseval.Options{BaseURL: srv.URL, APIKey: "k", Model: "m"})
 	a := llmats.New(engine, slog.Default())
-
 	_, err := a.Evaluate(context.Background(), "Go engineer", &model.Resume{Summary: "dev"})
 	if !errors.Is(err, model.ErrEvaluationFailed) {
 		t.Fatalf("expected ErrEvaluationFailed, got %v", err)

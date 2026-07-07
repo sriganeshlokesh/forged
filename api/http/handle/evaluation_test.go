@@ -2,7 +2,6 @@ package handle_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -10,17 +9,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
+
 	"github.com/sriganeshlokesh/forged/api/dto"
 	"github.com/sriganeshlokesh/forged/api/http/handle"
+	"github.com/sriganeshlokesh/forged/api/http/handle/mocks"
 	"github.com/sriganeshlokesh/forged/application/evaluation"
 	"github.com/sriganeshlokesh/forged/domain/model"
 )
 
-// fakeEval is a test double for service.IResumeEvaluator.
-type fakeEval struct{}
-
-func (f *fakeEval) Evaluate(_ context.Context, _ string, _ *model.Resume) (*model.Evaluation, error) {
-	return &model.Evaluation{
+func richEvaluationOutput() *evaluation.Output {
+	return &evaluation.Output{Evaluation: &model.Evaluation{
 		Score:   42,
 		Summary: "stub",
 		Dimensions: []model.Dimension{
@@ -29,28 +28,25 @@ func (f *fakeEval) Evaluate(_ context.Context, _ string, _ *model.Resume) (*mode
 		Strengths:   []string{"s"},
 		Gaps:        []string{"g"},
 		Suggestions: []string{},
-	}, nil
-}
-
-func newTestEvaluationHandler() *handle.EvaluationHandler {
-	uc := evaluation.NewUseCase(&fakeEval{})
-	return handle.NewEvaluationHandler(uc, slog.Default())
+	}}
 }
 
 func TestEvaluationHandler_Evaluate(t *testing.T) {
-	h := newTestEvaluationHandler()
-
 	validBody := `{"job_description":"Go engineer","resume":{"summary":"<p>Backend dev</p>","experience":[{"company":"Acme","role":"SWE","bullets":"<ul><li>Built X</li></ul>"}]}}`
 
 	tests := []struct {
 		name       string
 		body       string
+		setup      func(m *mocks.MockEvaluationUseCase)
 		wantStatus int
 		wantCode   int // 0 means no error code check
 	}{
 		{
-			name:       "happy path — full structured resume",
-			body:       validBody,
+			name: "happy path — full structured resume",
+			body: validBody,
+			setup: func(m *mocks.MockEvaluationUseCase) {
+				m.EXPECT().Execute(mock.Anything, mock.Anything).Return(richEvaluationOutput(), nil)
+			},
 			wantStatus: http.StatusOK,
 		},
 		{
@@ -60,22 +56,31 @@ func TestEvaluationHandler_Evaluate(t *testing.T) {
 			wantCode:   10001,
 		},
 		{
-			name:       "empty job description",
-			body:       `{"job_description":"","resume":{"summary":"<p>test</p>"}}`,
+			name: "validation failure maps to 10002",
+			body: `{"job_description":"","resume":{"summary":"<p>test</p>"}}`,
+			setup: func(m *mocks.MockEvaluationUseCase) {
+				m.EXPECT().Execute(mock.Anything, mock.Anything).Return(nil, model.ErrEmptyJobDescription)
+			},
 			wantStatus: http.StatusBadRequest,
 			wantCode:   10002,
 		},
 		{
-			name:       "whitespace-only job description",
-			body:       `{"job_description":"   ","resume":{"summary":"<p>test</p>"}}`,
+			name: "empty resume maps to 10002",
+			body: `{"job_description":"Go engineer","resume":{}}`,
+			setup: func(m *mocks.MockEvaluationUseCase) {
+				m.EXPECT().Execute(mock.Anything, mock.Anything).Return(nil, model.ErrEmptyResume)
+			},
 			wantStatus: http.StatusBadRequest,
 			wantCode:   10002,
 		},
 		{
-			name:       "empty resume object",
-			body:       `{"job_description":"Go engineer","resume":{}}`,
-			wantStatus: http.StatusBadRequest,
-			wantCode:   10002,
+			name: "evaluation backend failure maps to 30002/503",
+			body: validBody,
+			setup: func(m *mocks.MockEvaluationUseCase) {
+				m.EXPECT().Execute(mock.Anything, mock.Anything).Return(nil, model.ErrEvaluationFailed)
+			},
+			wantStatus: http.StatusServiceUnavailable,
+			wantCode:   30002,
 		},
 		{
 			name:       "oversized body",
@@ -87,6 +92,12 @@ func TestEvaluationHandler_Evaluate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			uc := mocks.NewMockEvaluationUseCase(t)
+			if tt.setup != nil {
+				tt.setup(uc)
+			}
+			h := handle.NewEvaluationHandler(uc, slog.Default())
+
 			req := httptest.NewRequest(http.MethodPost, "/v1/evaluations", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()

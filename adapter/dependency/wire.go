@@ -21,6 +21,7 @@ import (
 )
 
 // ServerSet groups the providers needed to build an *http.Server.
+// Consumer-declared interfaces are bound to their implementations here.
 var ServerSet = wire.NewSet(
 	handle.NewHealthHandler,
 	handle.NewEvaluationHandler,
@@ -28,6 +29,9 @@ var ServerSet = wire.NewSet(
 	ProvideEvaluator,
 	apihttp.NewRouter,
 	apihttp.NewServer,
+	wire.Bind(new(handle.EvaluationUseCase), new(*evaluation.UseCase)),
+	wire.Bind(new(apihttp.HealthRoutes), new(*handle.HealthHandler)),
+	wire.Bind(new(apihttp.EvaluationRoutes), new(*handle.EvaluationHandler)),
 )
 
 // InitializeServer is the wire injector that builds the complete *http.Server.

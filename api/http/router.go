@@ -7,14 +7,25 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/sriganeshlokesh/forged/api/http/handle"
 	"github.com/sriganeshlokesh/forged/api/http/middleware"
 )
+
+// HealthRoutes is what the router needs from the health handler.
+// Declared here, at the consumer; satisfied implicitly by *handle.HealthHandler.
+type HealthRoutes interface {
+	Health(w http.ResponseWriter, r *http.Request)
+}
+
+// EvaluationRoutes is what the router needs from the evaluation handler.
+// Satisfied implicitly by *handle.EvaluationHandler.
+type EvaluationRoutes interface {
+	Evaluate(w http.ResponseWriter, r *http.Request)
+}
 
 // NewRouter constructs a chi router with the standard middleware stack and all routes registered.
 // Middleware order: RequestID → RealIP → RequestLogger → Recoverer.
 // RequestLogger is placed before Recoverer so that panics are logged as 500s with full duration.
-func NewRouter(logger *slog.Logger, health *handle.HealthHandler, eval *handle.EvaluationHandler) http.Handler {
+func NewRouter(logger *slog.Logger, health HealthRoutes, eval EvaluationRoutes) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)

@@ -1,6 +1,6 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: all fmt lint test build run wire docker-build tidy
+.PHONY: all fmt lint test build run wire mocks docker-build tidy
 
 all: fmt lint test build
 
@@ -27,6 +27,9 @@ run:
 
 wire:
 	go tool wire ./adapter/dependency/
+
+mocks:
+	go tool mockery
 
 docker-build:
 	docker build --build-arg VERSION=$(VERSION) -t forged:local .

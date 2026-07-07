@@ -22,8 +22,8 @@ import (
 // wire.Build is replaced by generated code in wire_gen.go.
 func InitializeServer(cfg *config.Config, logger *slog.Logger) *http.Server {
 	healthHandler := handle.NewHealthHandler(cfg)
-	iResumeEvaluator := ProvideEvaluator(cfg, logger)
-	useCase := evaluation.NewUseCase(iResumeEvaluator)
+	resumeEvaluator := ProvideEvaluator(cfg, logger)
+	useCase := evaluation.NewUseCase(resumeEvaluator)
 	evaluationHandler := handle.NewEvaluationHandler(useCase, logger)
 	handler := http2.NewRouter(logger, healthHandler, evaluationHandler)
 	server := http2.NewServer(cfg, handler, logger)
@@ -33,4 +33,5 @@ func InitializeServer(cfg *config.Config, logger *slog.Logger) *http.Server {
 // wire.go:
 
 // ServerSet groups the providers needed to build an *http.Server.
-var ServerSet = wire.NewSet(handle.NewHealthHandler, handle.NewEvaluationHandler, evaluation.NewUseCase, ProvideEvaluator, http2.NewRouter, http2.NewServer)
+// Consumer-declared interfaces are bound to their implementations here.
+var ServerSet = wire.NewSet(handle.NewHealthHandler, handle.NewEvaluationHandler, evaluation.NewUseCase, ProvideEvaluator, http2.NewRouter, http2.NewServer, wire.Bind(new(handle.EvaluationUseCase), new(*evaluation.UseCase)), wire.Bind(new(http2.HealthRoutes), new(*handle.HealthHandler)), wire.Bind(new(http2.EvaluationRoutes), new(*handle.EvaluationHandler)))

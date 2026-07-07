@@ -13,14 +13,20 @@ import (
 	"github.com/sriganeshlokesh/forged/pkg/atseval"
 )
 
-// Adapter implements service.IResumeEvaluator backed by pkg/atseval.
+// Engine is what this adapter needs from the evaluation engine.
+// Declared here, at the consumer; satisfied implicitly by *atseval.Evaluator.
+type Engine interface {
+	Evaluate(ctx context.Context, jobDescription string, resume atseval.Resume) (*atseval.Evaluation, error)
+}
+
+// Adapter implements the application's ResumeEvaluator backed by pkg/atseval.
 type Adapter struct {
-	engine *atseval.Evaluator
+	engine Engine
 	logger *slog.Logger
 }
 
-// New builds an Adapter around a configured atseval.Evaluator.
-func New(engine *atseval.Evaluator, logger *slog.Logger) *Adapter {
+// New builds an Adapter around a configured evaluation engine.
+func New(engine Engine, logger *slog.Logger) *Adapter {
 	return &Adapter{engine: engine, logger: logger}
 }
 

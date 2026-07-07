@@ -1,0 +1,18 @@
+with-expecter: true
+resolve-type-alias: false
+disable-version-string: true
+issue-845-fix: true
+dir: "{{.InterfaceDir}}/mocks"
+outpkg: mocks
+mockname: "Mock{{.InterfaceName}}"
+filename: "mock_{{.InterfaceName}}.go"
+packages:
+  github.com/sriganeshlokesh/forged/application/evaluation:
+    interfaces:
+      ResumeEvaluator:
+  github.com/sriganeshlokesh/forged/api/http/handle:
+    interfaces:
+      EvaluationUseCase:
+  github.com/sriganeshlokesh/forged/adapter/llm/atseval:
+    interfaces:
+      Engine:

@@ -1,6 +1,7 @@
 package handle
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -13,16 +14,21 @@ import (
 	"github.com/sriganeshlokesh/forged/domain/model"
 )
 
+// EvaluationUseCase is the dependency this handler needs: executing the
+// resume-evaluation use case. Declared here, at the consumer, and satisfied
+// implicitly by *evaluation.UseCase (bound in adapter/dependency).
+type EvaluationUseCase interface {
+	Execute(ctx context.Context, in core.Input) (core.Output, error)
+}
+
 // EvaluationHandler handles the POST /v1/evaluations endpoint.
 type EvaluationHandler struct {
-	uc     core.UseCase
+	uc     EvaluationUseCase
 	logger *slog.Logger
 }
 
 // NewEvaluationHandler constructs an EvaluationHandler.
-// The constructor accepts *evaluation.UseCase (concrete) so wire has no ambiguity
-// when multiple use cases exist; it is stored as the core.UseCase interface.
-func NewEvaluationHandler(uc *evaluation.UseCase, logger *slog.Logger) *EvaluationHandler {
+func NewEvaluationHandler(uc EvaluationUseCase, logger *slog.Logger) *EvaluationHandler {
 	return &EvaluationHandler{uc: uc, logger: logger}
 }
 

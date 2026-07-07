@@ -7,8 +7,14 @@ import (
 
 	"github.com/sriganeshlokesh/forged/application/core"
 	"github.com/sriganeshlokesh/forged/domain/model"
-	"github.com/sriganeshlokesh/forged/domain/service"
 )
+
+// ResumeEvaluator is the dependency this use case needs: something that
+// can score a resume against a job description. Declared here, at the
+// consumer, so implementations (LLM adapter, stub) satisfy it implicitly.
+type ResumeEvaluator interface {
+	Evaluate(ctx context.Context, jobDescription string, resume *model.Resume) (*model.Evaluation, error)
+}
 
 // Input holds the parameters for a resume evaluation request.
 // It implements core.Input.
@@ -42,11 +48,11 @@ func (o *Output) GetStatus() string {
 
 // UseCase implements core.UseCase for resume evaluation.
 type UseCase struct {
-	evaluator service.IResumeEvaluator
+	evaluator ResumeEvaluator
 }
 
-// NewUseCase constructs a UseCase with the given evaluator port.
-func NewUseCase(ev service.IResumeEvaluator) *UseCase {
+// NewUseCase constructs a UseCase with the given evaluator.
+func NewUseCase(ev ResumeEvaluator) *UseCase {
 	return &UseCase{evaluator: ev}
 }
 

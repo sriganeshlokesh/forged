@@ -8,6 +8,7 @@
 make all          # fmt + lint + test + build (run before every commit)
 make run          # go run ./cmd (local dev)
 make wire         # regenerate wire_gen.go after any edit to adapter/dependency/wire.go
+make mocks        # regenerate mockery mocks after any change to a consumer interface
 make test         # go test -race -coverprofile=coverage.out ./...
 make lint         # golangci-lint run ./...
 make docker-build # build forged:local image
@@ -45,14 +46,14 @@ Strict inward-only imports. No exceptions except where noted.
 
 ### New domain concept
 - Entity + sentinel errors: `domain/model/`
-- Port interface (I-prefixed): `domain/repo/` (e.g. `IResumeRepo`)
 - Domain logic: `domain/service/`
 
 ### New external integration (database, LLM, HuggingFace, etc.)
-1. Port interface in `domain/repo/` or `domain/service/`
-2. Implementation in `adapter/<kind>/` (e.g. `adapter/llm/huggingface/`)
-3. Wire binding: `wire.Bind` interface → impl in `adapter/dependency/wire.go`
+1. The consumer (use case, handler) declares the interface it needs in its own constructor file (see Dependency injection below)
+2. Implementation in `adapter/<kind>/` (e.g. `adapter/llm/atseval/`) — satisfies the consumer interface implicitly
+3. Wiring in `adapter/dependency/`: `wire.Bind` consumer interface → impl, or a `Provide*` function in `providers.go` when selection depends on config
 4. API code **never** touches adapter packages directly
+5. Add the new interface to `.mockery.yaml`, run `make mocks`, use the mock in unit tests
 
 ### New config value
 1. Add field to `Config` struct in `config/config.go`
@@ -61,12 +62,14 @@ Strict inward-only imports. No exceptions except where noted.
 
 ## Conventions
 
-- **Interface naming**: I-prefix for port interfaces (`IResumeRepo`, `IAuthService`)
+- **Dependency injection**: every constructor takes its dependencies as **interfaces, never concrete types**. The interface is declared **in the same file as the constructor that consumes it** and contains **only the methods that package actually uses** (consumer-defined interfaces, e.g. `evaluation.ResumeEvaluator`, `handle.EvaluationUseCase`, `apihttp.HealthRoutes`). Implementations satisfy them implicitly; `adapter/dependency` binds them with `wire.Bind` or a provider function
+- **Interface naming**: name for the behavior the consumer needs (`ResumeEvaluator`, `EvaluationUseCase`) — no I-prefix
+- **Mocks**: generated with **mockery** (`.mockery.yaml` at repo root, output in `<pkg>/mocks/`). Workflow: add/change a consumer interface → register it in `.mockery.yaml` → `make mocks` → commit the generated files. Unit tests use generated mocks (`mocks.NewMockX(t)` + `.EXPECT()`), never hand-rolled fakes
 - **Package names**: lowercase, single word; `error_code` grandfathered for reference-repo parity
 - **Error codes**: 10000+ API · 20000+ auth · 30000+ internal · 40000+ business (see `api/error_code/`)
 - **Logging**: `log/slog` only — never `fmt.Println`, never `log.Printf`. Every log line includes `service` and `env` from the default logger
 - **Wire workflow**: edit `wire.go` → `make wire` → commit **both** `wire.go` and `wire_gen.go`
-- **Tests**: table-driven where multiple cases apply; `httptest.NewRecorder` for HTTP handlers
+- **Tests**: table-driven where multiple cases apply; `httptest.NewRecorder` for HTTP handlers; mockery mocks for injected dependencies
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`)
 
 ## Deployment (Railway)

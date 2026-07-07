@@ -5,29 +5,21 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
+
 	"github.com/sriganeshlokesh/forged/application/evaluation"
+	"github.com/sriganeshlokesh/forged/application/evaluation/mocks"
 	"github.com/sriganeshlokesh/forged/domain/model"
 )
 
-// fakeEvaluator is a test double for service.IResumeEvaluator.
-type fakeEvaluator struct{}
-
-func (f *fakeEvaluator) Evaluate(_ context.Context, _ string, _ *model.Resume) (*model.Evaluation, error) {
-	return &model.Evaluation{
-		Score:       42,
-		Summary:     "fake summary",
-		Suggestions: []string{"improve X"},
-	}, nil
-}
-
 func TestUseCase_Execute(t *testing.T) {
-	uc := evaluation.NewUseCase(&fakeEvaluator{})
-
 	nonEmpty := &model.Resume{Summary: "<p>Backend developer</p>"}
+	evalErr := errors.New("provider exploded")
 
 	tests := []struct {
 		name    string
 		in      *evaluation.Input
+		setup   func(m *mocks.MockResumeEvaluator)
 		wantErr error
 		wantOK  bool
 	}{
@@ -47,14 +39,35 @@ func TestUseCase_Execute(t *testing.T) {
 			wantErr: model.ErrEmptyResume,
 		},
 		{
-			name:   "success",
-			in:     &evaluation.Input{JobDescription: "Go engineer", Resume: nonEmpty},
+			name: "evaluator failure propagates",
+			in:   &evaluation.Input{JobDescription: "Go engineer", Resume: nonEmpty},
+			setup: func(m *mocks.MockResumeEvaluator) {
+				m.EXPECT().
+					Evaluate(mock.Anything, "Go engineer", nonEmpty).
+					Return(nil, evalErr)
+			},
+			wantErr: evalErr,
+		},
+		{
+			name: "success",
+			in:   &evaluation.Input{JobDescription: "Go engineer", Resume: nonEmpty},
+			setup: func(m *mocks.MockResumeEvaluator) {
+				m.EXPECT().
+					Evaluate(mock.Anything, "Go engineer", nonEmpty).
+					Return(&model.Evaluation{Score: 42, Summary: "fake summary"}, nil)
+			},
 			wantOK: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			evaluator := mocks.NewMockResumeEvaluator(t)
+			if tt.setup != nil {
+				tt.setup(evaluator)
+			}
+			uc := evaluation.NewUseCase(evaluator)
+
 			out, err := uc.Execute(context.Background(), tt.in)
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {

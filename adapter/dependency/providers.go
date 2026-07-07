@@ -5,15 +5,15 @@ import (
 
 	evstub "github.com/sriganeshlokesh/forged/adapter/evaluator/stub"
 	llmats "github.com/sriganeshlokesh/forged/adapter/llm/atseval"
+	"github.com/sriganeshlokesh/forged/application/evaluation"
 	"github.com/sriganeshlokesh/forged/config"
-	"github.com/sriganeshlokesh/forged/domain/service"
 	"github.com/sriganeshlokesh/forged/pkg/atseval"
 )
 
 // ProvideEvaluator selects the resume evaluator implementation at startup:
 // the LLM-backed engine when an API key is configured, otherwise the stub
 // so local dev and deploys work without credentials.
-func ProvideEvaluator(cfg *config.Config, logger *slog.Logger) service.IResumeEvaluator {
+func ProvideEvaluator(cfg *config.Config, logger *slog.Logger) evaluation.ResumeEvaluator {
 	if cfg.LLMAPIKey == "" {
 		logger.Warn("LLM_API_KEY not set — using stub evaluator")
 		return evstub.NewStubEvaluator()
