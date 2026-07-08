@@ -19,6 +19,7 @@ type Resume struct {
 
 // Experience is a single work-experience entry.
 type Experience struct {
+	ID         string
 	Company    string
 	Role       string
 	Employment string
@@ -30,6 +31,7 @@ type Experience struct {
 
 // Project is a single project entry.
 type Project struct {
+	ID          string
 	Name        string
 	Link        string
 	Description string
@@ -38,6 +40,7 @@ type Project struct {
 
 // Education is a single education entry.
 type Education struct {
+	ID           string
 	School       string
 	Degree       string
 	Start        string
@@ -53,6 +56,7 @@ type EducationDetail struct {
 
 // SkillGroup groups related skills under a shared label.
 type SkillGroup struct {
+	ID    string
 	Label string
 	Items []string
 }
@@ -69,6 +73,19 @@ type Evaluation struct {
 	Suggestions []Suggestion
 }
 
+// ActionTarget identifies the specific resume field a suggestion action targets.
+type ActionTarget struct {
+	Section string
+	ItemID  string
+	Field   string
+}
+
+// SuggestionAction specifies a structured edit operation for a suggestion.
+type SuggestionAction struct {
+	Type   string
+	Target ActionTarget
+}
+
 // Suggestion is one concrete resume edit, with the resume section to change,
 // the rubric dimension it improves, and a realistic estimated score gain.
 // Cumulative lifts per dimension never exceed that dimension's remaining
@@ -82,6 +99,8 @@ type Suggestion struct {
 	Dimension string
 	// EstimatedLift is the estimated score gain if the edit is applied.
 	EstimatedLift int
+	// Action is non-nil when the suggestion targets a specific item field for rewriting.
+	Action *SuggestionAction
 }
 
 // Dimension is one rubric axis with the evidence justifying its score.

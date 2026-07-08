@@ -66,12 +66,30 @@ const evaluationSchema = `{
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["text", "section", "dimension", "estimated_lift"],
+            "required": ["text", "section", "dimension", "estimated_lift", "action"],
             "properties": {
               "text": {"type": "string"},
               "section": {"type": "string", "enum": ["summary", "experience", "projects", "education", "skills"]},
               "dimension": {"type": "string", "enum": ["skills_match", "experience_relevance", "impact_evidence", "education_extras"]},
-              "estimated_lift": {"type": "integer"}
+              "estimated_lift": {"type": "integer"},
+              "action": {
+                "type": ["object", "null"],
+                "properties": {
+                  "type": {"type": "string", "enum": ["rewrite_field"]},
+                  "target": {
+                    "type": "object",
+                    "properties": {
+                      "section": {"type": "string"},
+                      "item_id": {"type": "string"},
+                      "field": {"type": "string"}
+                    },
+                    "required": ["section", "item_id", "field"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["type", "target"],
+                "additionalProperties": false
+              }
             }
           }
         }

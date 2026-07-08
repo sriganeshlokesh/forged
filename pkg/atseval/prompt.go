@@ -43,6 +43,7 @@ Hard rules:
   - "dimension" is the rubric dimension the edit improves: one of "skills_match", "experience_relevance", "impact_evidence", "education_extras".
   - "estimated_lift" is a realistic estimate of the score points gained if the edit is applied. The sum of estimated_lift values for a given dimension must not exceed that dimension's remaining headroom (its max minus the score you awarded).
   - Order suggestions by estimated_lift, highest first.
+  - When a suggestion targets one specific entry, include an "action" of type "rewrite_field" whose "target.item_id" is the bracketed id shown in the resume (e.g. "[exp:a1b2c3]" → "a1b2c3"). Valid targets: section "summary" with field "summary" and empty item_id; section "experience" with field "bullets"; section "projects" with field "description". If a suggestion has no single target, set "action" to null.
 - The overall "score" must equal the sum of the four dimension scores.
 
 Respond with a single JSON object exactly matching this shape (no markdown, no commentary):
@@ -58,7 +59,7 @@ Respond with a single JSON object exactly matching this shape (no markdown, no c
   "strengths": ["..."],
   "gaps": ["..."],
   "suggestions": [
-    {"text": "...", "section": "skills", "dimension": "skills_match", "estimated_lift": <int>}
+    {"text": "...", "section": "skills", "dimension": "skills_match", "estimated_lift": <int>, "action": null}
   ]
 }`
 
@@ -90,7 +91,11 @@ func renderResume(r Resume) string {
 			if e.Present {
 				end = "present"
 			}
-			fmt.Fprintf(&b, "### %s — %s", e.Role, e.Company)
+			if e.ID != "" {
+				fmt.Fprintf(&b, "### [exp:%s] %s — %s", e.ID, e.Role, e.Company)
+			} else {
+				fmt.Fprintf(&b, "### %s — %s", e.Role, e.Company)
+			}
 			if e.Employment != "" {
 				fmt.Fprintf(&b, " (%s)", e.Employment)
 			}
@@ -109,7 +114,11 @@ func renderResume(r Resume) string {
 	if len(r.Projects) > 0 {
 		b.WriteString("## Projects\n")
 		for _, p := range r.Projects {
-			fmt.Fprintf(&b, "### %s", p.Name)
+			if p.ID != "" {
+				fmt.Fprintf(&b, "### [prj:%s] %s", p.ID, p.Name)
+			} else {
+				fmt.Fprintf(&b, "### %s", p.Name)
+			}
 			if p.Link != "" {
 				fmt.Fprintf(&b, " (%s)", p.Link)
 			}
@@ -128,7 +137,11 @@ func renderResume(r Resume) string {
 	if len(r.Education) > 0 {
 		b.WriteString("## Education\n")
 		for _, ed := range r.Education {
-			fmt.Fprintf(&b, "### %s — %s", ed.Degree, ed.School)
+			if ed.ID != "" {
+				fmt.Fprintf(&b, "### [edu:%s] %s — %s", ed.ID, ed.Degree, ed.School)
+			} else {
+				fmt.Fprintf(&b, "### %s — %s", ed.Degree, ed.School)
+			}
 			if ed.Start != "" || ed.End != "" {
 				fmt.Fprintf(&b, " | %s - %s", ed.Start, ed.End)
 			}
@@ -143,7 +156,11 @@ func renderResume(r Resume) string {
 	if len(r.SkillGroups) > 0 {
 		b.WriteString("## Skills\n")
 		for _, sg := range r.SkillGroups {
-			fmt.Fprintf(&b, "- %s: %s\n", sg.Label, strings.Join(sg.Items, ", "))
+			if sg.ID != "" {
+				fmt.Fprintf(&b, "- [skill:%s] %s: %s\n", sg.ID, sg.Label, strings.Join(sg.Items, ", "))
+			} else {
+				fmt.Fprintf(&b, "- %s: %s\n", sg.Label, strings.Join(sg.Items, ", "))
+			}
 		}
 		b.WriteString("\n")
 	}

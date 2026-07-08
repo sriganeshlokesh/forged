@@ -202,7 +202,7 @@ func TestParseEvaluation_ClampsAndRecomputes(t *testing.T) {
 		],
 		"strengths": null, "gaps": null, "suggestions": null
 	}`
-	eval, err := parseEvaluation(raw)
+	eval, err := parseEvaluation(raw, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestParseEvaluation_SuggestionNormalization(t *testing.T) {
 			{"text": "Bad section", "section": "hobbies", "dimension": "unknown_dim", "estimated_lift": -2}
 		]
 	}`
-	eval, err := parseEvaluation(raw)
+	eval, err := parseEvaluation(raw, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

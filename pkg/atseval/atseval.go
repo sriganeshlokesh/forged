@@ -68,7 +68,8 @@ func (e *Evaluator) Evaluate(ctx context.Context, jobDescription string, resume 
 		return nil, err
 	}
 
-	eval, parseErr := parseEvaluation(content)
+	knownIDs := knownItemIDs(resume)
+	eval, parseErr := parseEvaluation(content, knownIDs)
 	if parseErr != nil {
 		// One retry with an explicit reminder for models that wrapped the
 		// JSON in prose or markdown fences.
@@ -80,7 +81,7 @@ func (e *Evaluator) Evaluate(ctx context.Context, jobDescription string, resume 
 		if err != nil {
 			return nil, err
 		}
-		eval, parseErr = parseEvaluation(content)
+		eval, parseErr = parseEvaluation(content, knownIDs)
 		if parseErr != nil {
 			return nil, fmt.Errorf("%w: %w", ErrBadResponse, parseErr)
 		}
@@ -88,8 +89,49 @@ func (e *Evaluator) Evaluate(ctx context.Context, jobDescription string, resume 
 	return eval, nil
 }
 
+// knownItemIDs returns the set of non-empty IDs across all resume items.
+func knownItemIDs(r Resume) map[string]bool {
+	ids := make(map[string]bool)
+	for _, e := range r.Experience {
+		if e.ID != "" {
+			ids[e.ID] = true
+		}
+	}
+	for _, p := range r.Projects {
+		if p.ID != "" {
+			ids[p.ID] = true
+		}
+	}
+	for _, ed := range r.Education {
+		if ed.ID != "" {
+			ids[ed.ID] = true
+		}
+	}
+	for _, sg := range r.SkillGroups {
+		if sg.ID != "" {
+			ids[sg.ID] = true
+		}
+	}
+	return ids
+}
+
+// validActionTarget reports whether a suggestion action target is a permitted Phase-1 rewrite target.
+func validActionTarget(t ActionTarget, knownIDs map[string]bool) bool {
+	switch {
+	case t.Section == "summary" && t.Field == "summary" && t.ItemID == "":
+		return true
+	case t.Section == "experience" && t.Field == "bullets" && t.ItemID != "" && knownIDs[t.ItemID]:
+		return true
+	case t.Section == "projects" && t.Field == "description" && t.ItemID != "" && knownIDs[t.ItemID]:
+		return true
+	default:
+		return false
+	}
+}
+
 // parseEvaluation parses and normalizes the model's JSON reply.
-func parseEvaluation(content string) (*Evaluation, error) {
+// knownIDs is the set of item IDs present in the resume, used to validate suggestion actions.
+func parseEvaluation(content string, knownIDs map[string]bool) (*Evaluation, error) {
 	var out struct {
 		Score      int    `json:"score"`
 		Summary    string `json:"summary"`
@@ -107,6 +149,14 @@ func parseEvaluation(content string) (*Evaluation, error) {
 			Section       string `json:"section"`
 			Dimension     string `json:"dimension"`
 			EstimatedLift int    `json:"estimated_lift"`
+			Action        *struct {
+				Type   string `json:"type"`
+				Target struct {
+					Section string `json:"section"`
+					ItemID  string `json:"item_id"`
+					Field   string `json:"field"`
+				} `json:"target"`
+			} `json:"action"`
 		} `json:"suggestions"`
 	}
 	if err := json.Unmarshal([]byte(extractJSON(content)), &out); err != nil {
@@ -162,16 +212,34 @@ func parseEvaluation(content string) (*Evaluation, error) {
 		if budget, known := headroom[s.Dimension]; known {
 			lift = clamp(lift, 0, budget)
 			headroom[s.Dimension] -= lift
-			eval.Suggestions = append(eval.Suggestions, Suggestion{
-				Text: text, Section: section, Dimension: s.Dimension, EstimatedLift: lift,
-			})
+			sug := Suggestion{Text: text, Section: section, Dimension: s.Dimension, EstimatedLift: lift}
+			if s.Action != nil && s.Action.Type == "rewrite_field" {
+				t := ActionTarget{
+					Section: s.Action.Target.Section,
+					ItemID:  s.Action.Target.ItemID,
+					Field:   s.Action.Target.Field,
+				}
+				if validActionTarget(t, knownIDs) {
+					sug.Action = &SuggestionAction{Type: s.Action.Type, Target: t}
+				}
+			}
+			eval.Suggestions = append(eval.Suggestions, sug)
 			continue
 		}
 		lift = clamp(lift, 0, unknownBudget)
 		unknownBudget -= lift
-		eval.Suggestions = append(eval.Suggestions, Suggestion{
-			Text: text, Section: section, Dimension: "", EstimatedLift: lift,
-		})
+		sug := Suggestion{Text: text, Section: section, Dimension: "", EstimatedLift: lift}
+		if s.Action != nil && s.Action.Type == "rewrite_field" {
+			t := ActionTarget{
+				Section: s.Action.Target.Section,
+				ItemID:  s.Action.Target.ItemID,
+				Field:   s.Action.Target.Field,
+			}
+			if validActionTarget(t, knownIDs) {
+				sug.Action = &SuggestionAction{Type: s.Action.Type, Target: t}
+			}
+		}
+		eval.Suggestions = append(eval.Suggestions, sug)
 	}
 	return eval, nil
 }
