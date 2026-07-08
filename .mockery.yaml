@@ -10,6 +10,9 @@ packages:
   github.com/sriganeshlokesh/forged/application/evaluation:
     interfaces:
       ResumeEvaluator:
+  github.com/sriganeshlokesh/forged/application/revision:
+    interfaces:
+      ResumeReviser:
   github.com/sriganeshlokesh/forged/api/http/handle:
     interfaces:
       EvaluationUseCase:
