@@ -17,6 +17,7 @@ import (
 // Declared here, at the consumer; satisfied implicitly by *atseval.Evaluator.
 type Engine interface {
 	Evaluate(ctx context.Context, jobDescription string, resume atseval.Resume) (*atseval.Evaluation, error)
+	Revise(ctx context.Context, req atseval.RevisionRequest) (*atseval.RevisionResult, error)
 }
 
 // Adapter implements the application's ResumeEvaluator backed by pkg/atseval.
@@ -56,14 +57,48 @@ func (a *Adapter) Evaluate(ctx context.Context, jobDescription string, resume *m
 		})
 	}
 	for _, s := range result.Suggestions {
-		eval.Suggestions = append(eval.Suggestions, model.Suggestion{
+		sug := model.Suggestion{
 			Text:          s.Text,
 			Section:       s.Section,
 			Dimension:     s.Dimension,
 			EstimatedLift: s.EstimatedLift,
-		})
+		}
+		if s.Action != nil {
+			sug.Action = &model.SuggestionAction{
+				Type: model.ActionType(s.Action.Type),
+				Target: model.RevisionTarget{
+					Section: s.Action.Target.Section,
+					ItemID:  s.Action.Target.ItemID,
+					Field:   s.Action.Target.Field,
+				},
+			}
+		}
+		eval.Suggestions = append(eval.Suggestions, sug)
 	}
 	return eval, nil
+}
+
+// Revise maps a domain revision spec into the engine and returns the draft.
+func (a *Adapter) Revise(ctx context.Context, spec model.RevisionSpec) (string, string, error) {
+	req := atseval.RevisionRequest{
+		JobDescription: spec.JobDescription,
+		SuggestionText: spec.SuggestionText,
+		ActionType:     string(spec.Action.Type),
+		Field:          spec.Action.Target.Field,
+		Content:        spec.Content,
+		Context: atseval.RevisionContext{
+			Company: spec.Context.Company,
+			Role:    spec.Context.Role,
+			Name:    spec.Context.Name,
+		},
+		Feedback: spec.Feedback,
+	}
+	result, err := a.engine.Revise(ctx, req)
+	if err != nil {
+		a.logger.ErrorContext(ctx, "llm revision failed", slog.String("error", err.Error()))
+		return "", "", fmt.Errorf("%w: %w", model.ErrRevisionFailed, err)
+	}
+	return result.After, result.Rationale, nil
 }
 
 func toEngineResume(r *model.Resume) atseval.Resume {
@@ -78,6 +113,7 @@ func toEngineResume(r *model.Resume) atseval.Resume {
 	}
 	for _, e := range r.Experience {
 		out.Experience = append(out.Experience, atseval.Experience{
+			ID:         e.ID,
 			Company:    e.Company,
 			Role:       e.Role,
 			Employment: e.Employment,
@@ -89,6 +125,7 @@ func toEngineResume(r *model.Resume) atseval.Resume {
 	}
 	for _, p := range r.Projects {
 		out.Projects = append(out.Projects, atseval.Project{
+			ID:          p.ID,
 			Name:        p.Name,
 			Link:        p.Link,
 			Description: p.Description,
@@ -97,6 +134,7 @@ func toEngineResume(r *model.Resume) atseval.Resume {
 	}
 	for _, ed := range r.Education {
 		edu := atseval.Education{
+			ID:     ed.ID,
 			School: ed.School,
 			Degree: ed.Degree,
 			Start:  ed.Start,
@@ -108,7 +146,7 @@ func toEngineResume(r *model.Resume) atseval.Resume {
 		out.Education = append(out.Education, edu)
 	}
 	for _, sg := range r.SkillGroups {
-		out.SkillGroups = append(out.SkillGroups, atseval.SkillGroup{Label: sg.Label, Items: sg.Items})
+		out.SkillGroups = append(out.SkillGroups, atseval.SkillGroup{ID: sg.ID, Label: sg.Label, Items: sg.Items})
 	}
 	return out
 }

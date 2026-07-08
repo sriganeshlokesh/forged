@@ -1,13 +1,17 @@
-// Package stub provides a placeholder implementation of service.IResumeEvaluator.
-// It returns a fixed response so the frontend can build against the real contract
-// before an LLM adapter is wired in.
+// Package stub provides deterministic placeholder implementations of the
+// application's evaluator and reviser ports. They return fixed responses so
+// the frontend can build against the real contract before an LLM adapter is
+// wired in.
 //
-// To swap in a real evaluator: add adapter/llm/… and change the wire.Bind in
-// adapter/dependency/wire.go — no other files need to change.
+// To swap in a real implementation: adapter/llm/… satisfies the same
+// consumer interfaces and adapter/dependency selects by config — no other
+// files need to change.
 package stub
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/sriganeshlokesh/forged/domain/model"
 )
@@ -36,4 +40,36 @@ func (s *StubEvaluator) Evaluate(_ context.Context, _ string, _ *model.Resume) (
 		Gaps:        []string{},
 		Suggestions: []model.Suggestion{},
 	}, nil
+}
+
+// StubReviser is a deterministic no-op revision implementation used when no
+// LLM API key is configured, so local dev and deploys work without credentials.
+// For bullets it inserts a marker <li> before the closing </ul>; for summary
+// and description fields it appends a marker <p>.
+type StubReviser struct{}
+
+// NewStubReviser constructs a StubReviser.
+func NewStubReviser() *StubReviser {
+	return &StubReviser{}
+}
+
+// Revise applies a deterministic edit so the frontend can exercise the full
+// revision flow without an LLM.
+func (s *StubReviser) Revise(_ context.Context, spec model.RevisionSpec) (string, string, error) {
+	content := spec.Content
+	tag := fmt.Sprintf("<li>[stub edit] %s</li>", spec.SuggestionText)
+	const rationale = "stub reviser: deterministic edit for local development"
+
+	if spec.Action.Target.Field == "bullets" {
+		idx := strings.LastIndex(content, "</ul>")
+		if idx >= 0 {
+			content = content[:idx] + tag + "</ul>" + content[idx+5:]
+		} else {
+			content = content + tag
+		}
+		return content, rationale, nil
+	}
+	// summary/description default
+	content = content + fmt.Sprintf("<p>[stub edit] %s</p>", spec.SuggestionText)
+	return content, rationale, nil
 }
