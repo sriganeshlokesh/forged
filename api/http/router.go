@@ -24,7 +24,9 @@ type EvaluationRoutes interface {
 }
 
 // NewRouter constructs a chi router with the standard middleware stack and all routes registered.
-// Middleware order: RequestID → RealIP → RequestLogger → Recoverer.
+// Middleware order: RequestID → RealIP → RequestLogger → Recoverer → CORS.
+// CORS is placed after Recoverer so that preflight OPTIONS requests receive
+// the correct headers even when other middleware panics or rejects the request.
 // RequestLogger is placed before Recoverer so that panics are logged as 500s with full duration.
 func NewRouter(cfg *config.Config, logger *slog.Logger, health HealthRoutes, eval EvaluationRoutes) http.Handler {
 	r := chi.NewRouter()
@@ -33,6 +35,7 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, health HealthRoutes, eva
 	r.Use(chimw.RealIP) //nolint:staticcheck // trusted behind Railway's edge proxy, which always sets X-Forwarded-For
 	r.Use(middleware.RequestLogger(logger))
 	r.Use(chimw.Recoverer)
+	r.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 
 	// /health stays outside the rate limiter — Railway healthchecks must never 429.
 	r.Get("/health", health.Health)
