@@ -27,6 +27,7 @@ func (r *Resume) IsEmpty() bool {
 
 // Experience represents a single work-experience entry.
 type Experience struct {
+	ID         string
 	Company    string
 	Role       string
 	Employment string
@@ -38,6 +39,7 @@ type Experience struct {
 
 // Project represents a single project entry.
 type Project struct {
+	ID          string
 	Name        string
 	Link        string
 	Description string
@@ -46,6 +48,7 @@ type Project struct {
 
 // Education represents a single education entry.
 type Education struct {
+	ID           string
 	School       string
 	Degree       string
 	Start        string
@@ -61,6 +64,7 @@ type EducationDetail struct {
 
 // SkillGroup groups related skills under a shared label.
 type SkillGroup struct {
+	ID    string
 	Label string
 	Items []string
 }

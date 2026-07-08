@@ -24,11 +24,13 @@ type Evaluation struct {
 
 // Suggestion is one concrete resume edit: the section to change, the rubric
 // dimension it improves, and the estimated score gain if applied.
+// Action is non-nil when the suggestion targets a specific item field.
 type Suggestion struct {
 	Text          string
 	Section       string
 	Dimension     string
 	EstimatedLift int
+	Action        *SuggestionAction
 }
 
 // Dimension is one scored axis of an evaluation (e.g. skills match),
