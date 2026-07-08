@@ -44,7 +44,7 @@ func (a *Adapter) Evaluate(ctx context.Context, jobDescription string, resume *m
 		Dimensions:  make([]model.Dimension, 0, len(result.Dimensions)),
 		Strengths:   result.Strengths,
 		Gaps:        result.Gaps,
-		Suggestions: result.Suggestions,
+		Suggestions: make([]model.Suggestion, 0, len(result.Suggestions)),
 	}
 	for _, d := range result.Dimensions {
 		eval.Dimensions = append(eval.Dimensions, model.Dimension{
@@ -53,6 +53,14 @@ func (a *Adapter) Evaluate(ctx context.Context, jobDescription string, resume *m
 			Score:    d.Score,
 			Max:      d.Max,
 			Evidence: d.Evidence,
+		})
+	}
+	for _, s := range result.Suggestions {
+		eval.Suggestions = append(eval.Suggestions, model.Suggestion{
+			Text:          s.Text,
+			Section:       s.Section,
+			Dimension:     s.Dimension,
+			EstimatedLift: s.EstimatedLift,
 		})
 	}
 	return eval, nil

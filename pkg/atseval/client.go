@@ -61,7 +61,20 @@ const evaluationSchema = `{
         },
         "strengths": {"type": "array", "items": {"type": "string"}},
         "gaps": {"type": "array", "items": {"type": "string"}},
-        "suggestions": {"type": "array", "items": {"type": "string"}}
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text", "section", "dimension", "estimated_lift"],
+            "properties": {
+              "text": {"type": "string"},
+              "section": {"type": "string", "enum": ["summary", "experience", "projects", "education", "skills"]},
+              "dimension": {"type": "string", "enum": ["skills_match", "experience_relevance", "impact_evidence", "education_extras"]},
+              "estimated_lift": {"type": "integer"}
+            }
+          }
+        }
       }
     }
   }

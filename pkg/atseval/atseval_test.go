@@ -21,7 +21,9 @@ const validEvaluationJSON = `{
 	],
 	"strengths": ["Strong Go background"],
 	"gaps": ["No Kubernetes"],
-	"suggestions": ["Quantify the Acme bullet"]
+	"suggestions": [
+		{"text": "Quantify the Acme bullet", "section": "experience", "dimension": "impact_evidence", "estimated_lift": 4}
+	]
 }`
 
 func chatBody(content string) string {
@@ -215,6 +217,45 @@ func TestParseEvaluation_ClampsAndRecomputes(t *testing.T) {
 	}
 	if eval.Strengths == nil || eval.Gaps == nil || eval.Suggestions == nil {
 		t.Error("expected nil slices normalized to empty")
+	}
+}
+
+func TestParseEvaluation_SuggestionNormalization(t *testing.T) {
+	// skills_match has 35-28 = 7 points of headroom; overall score 28 → 72 unknown budget.
+	raw := `{
+		"score": 28,
+		"summary": "s",
+		"dimensions": [
+			{"key": "skills_match", "label": "Skills match", "score": 28, "max": 35, "evidence": ""}
+		],
+		"strengths": [], "gaps": [],
+		"suggestions": [
+			{"text": "Add gRPC", "section": "skills", "dimension": "skills_match", "estimated_lift": 5},
+			{"text": "Add Kafka", "section": "skills", "dimension": "skills_match", "estimated_lift": 6},
+			{"text": "  ", "section": "skills", "dimension": "skills_match", "estimated_lift": 3},
+			{"text": "Bad section", "section": "hobbies", "dimension": "unknown_dim", "estimated_lift": -2}
+		]
+	}`
+	eval, err := parseEvaluation(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(eval.Suggestions) != 3 {
+		t.Fatalf("expected 3 suggestions (blank text dropped), got %d", len(eval.Suggestions))
+	}
+	if eval.Suggestions[0].EstimatedLift != 5 {
+		t.Errorf("first lift: expected 5, got %d", eval.Suggestions[0].EstimatedLift)
+	}
+	// Second suggestion asked for 6 but only 2 points of skills_match headroom remain.
+	if eval.Suggestions[1].EstimatedLift != 2 {
+		t.Errorf("second lift: expected cap at 2 (remaining headroom), got %d", eval.Suggestions[1].EstimatedLift)
+	}
+	last := eval.Suggestions[2]
+	if last.Section != "" || last.Dimension != "" {
+		t.Errorf("expected invalid section/dimension blanked, got %q/%q", last.Section, last.Dimension)
+	}
+	if last.EstimatedLift != 0 {
+		t.Errorf("expected negative lift clamped to 0, got %d", last.EstimatedLift)
 	}
 }
 

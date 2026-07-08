@@ -25,9 +25,11 @@ func richEvaluationOutput() *evaluation.Output {
 		Dimensions: []model.Dimension{
 			{Key: "skills_match", Label: "Skills match", Score: 42, Max: 35, Evidence: "Go"},
 		},
-		Strengths:   []string{"s"},
-		Gaps:        []string{"g"},
-		Suggestions: []string{},
+		Strengths: []string{"s"},
+		Gaps:      []string{"g"},
+		Suggestions: []model.Suggestion{
+			{Text: "Add gRPC", Section: "skills", Dimension: "skills_match", EstimatedLift: 5},
+		},
 	}}
 }
 
@@ -135,8 +137,10 @@ func TestEvaluationHandler_Evaluate(t *testing.T) {
 			if evalResp.Status != "ok" {
 				t.Errorf("expected status 'ok', got %q", evalResp.Status)
 			}
-			if evalResp.Suggestions == nil {
-				t.Error("expected Suggestions to be non-nil slice")
+			if len(evalResp.Suggestions) != 1 ||
+				evalResp.Suggestions[0].Section != "skills" ||
+				evalResp.Suggestions[0].EstimatedLift != 5 {
+				t.Errorf("unexpected suggestions: %+v", evalResp.Suggestions)
 			}
 			if len(evalResp.Dimensions) != 1 || evalResp.Dimensions[0].Key != "skills_match" {
 				t.Errorf("expected one skills_match dimension, got %+v", evalResp.Dimensions)

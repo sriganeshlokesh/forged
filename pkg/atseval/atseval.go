@@ -102,7 +102,12 @@ func parseEvaluation(content string) (*Evaluation, error) {
 		} `json:"dimensions"`
 		Strengths   []string `json:"strengths"`
 		Gaps        []string `json:"gaps"`
-		Suggestions []string `json:"suggestions"`
+		Suggestions []struct {
+			Text          string `json:"text"`
+			Section       string `json:"section"`
+			Dimension     string `json:"dimension"`
+			EstimatedLift int    `json:"estimated_lift"`
+		} `json:"suggestions"`
 	}
 	if err := json.Unmarshal([]byte(extractJSON(content)), &out); err != nil {
 		return nil, fmt.Errorf("parse evaluation JSON: %w", err)
@@ -116,15 +121,19 @@ func parseEvaluation(content string) (*Evaluation, error) {
 		Dimensions:  make([]Dimension, 0, len(out.Dimensions)),
 		Strengths:   emptyIfNil(out.Strengths),
 		Gaps:        emptyIfNil(out.Gaps),
-		Suggestions: emptyIfNil(out.Suggestions),
+		Suggestions: []Suggestion{},
 	}
 	sum := 0
+	// headroom tracks the remaining points available per dimension; suggestion
+	// lifts are capped against it so displayed gains stay achievable.
+	headroom := make(map[string]int, len(out.Dimensions))
 	for _, d := range out.Dimensions {
 		if d.Max <= 0 {
 			return nil, fmt.Errorf("dimension %q has invalid max %d", d.Key, d.Max)
 		}
 		score := clamp(d.Score, 0, d.Max)
 		sum += score
+		headroom[d.Key] = d.Max - score
 		eval.Dimensions = append(eval.Dimensions, Dimension{
 			Key:      d.Key,
 			Label:    d.Label,
@@ -135,7 +144,45 @@ func parseEvaluation(content string) (*Evaluation, error) {
 	}
 	// The overall score must equal the dimension sum; trust the sum.
 	eval.Score = clamp(sum, 0, 100)
+
+	unknownBudget := 100 - eval.Score
+	for _, s := range out.Suggestions {
+		text := strings.TrimSpace(s.Text)
+		if text == "" {
+			continue
+		}
+		section := s.Section
+		if !validSections[section] {
+			section = ""
+		}
+		lift := s.EstimatedLift
+		if lift < 0 {
+			lift = 0
+		}
+		if budget, known := headroom[s.Dimension]; known {
+			lift = clamp(lift, 0, budget)
+			headroom[s.Dimension] -= lift
+			eval.Suggestions = append(eval.Suggestions, Suggestion{
+				Text: text, Section: section, Dimension: s.Dimension, EstimatedLift: lift,
+			})
+			continue
+		}
+		lift = clamp(lift, 0, unknownBudget)
+		unknownBudget -= lift
+		eval.Suggestions = append(eval.Suggestions, Suggestion{
+			Text: text, Section: section, Dimension: "", EstimatedLift: lift,
+		})
+	}
 	return eval, nil
+}
+
+// validSections are the resume sections the frontend can jump to.
+var validSections = map[string]bool{
+	"summary":    true,
+	"experience": true,
+	"projects":   true,
+	"education":  true,
+	"skills":     true,
 }
 
 // extractJSON tolerates markdown fences and surrounding prose by slicing

@@ -130,13 +130,22 @@ func (r *ResumeDTO) ToModel() *model.Resume {
 
 // EvaluationResponse is the JSON response body for POST /v1/evaluations.
 type EvaluationResponse struct {
-	Status      string         `json:"status"`
-	Score       int            `json:"score"`
-	Summary     string         `json:"summary"`
-	Dimensions  []DimensionDTO `json:"dimensions"`
-	Strengths   []string       `json:"strengths"`
-	Gaps        []string       `json:"gaps"`
-	Suggestions []string       `json:"suggestions"`
+	Status      string          `json:"status"`
+	Score       int             `json:"score"`
+	Summary     string          `json:"summary"`
+	Dimensions  []DimensionDTO  `json:"dimensions"`
+	Strengths   []string        `json:"strengths"`
+	Gaps        []string        `json:"gaps"`
+	Suggestions []SuggestionDTO `json:"suggestions"`
+}
+
+// SuggestionDTO is one suggested resume edit with its estimated score lift
+// and the resume section the frontend should jump to.
+type SuggestionDTO struct {
+	Text          string `json:"text"`
+	Section       string `json:"section"`
+	Dimension     string `json:"dimension"`
+	EstimatedLift int    `json:"estimated_lift"`
 }
 
 // DimensionDTO is one scored rubric axis in an evaluation response.
@@ -158,7 +167,7 @@ func NewEvaluationResponse(status string, e *model.Evaluation) EvaluationRespons
 		Dimensions:  make([]DimensionDTO, 0, len(e.Dimensions)),
 		Strengths:   emptyIfNil(e.Strengths),
 		Gaps:        emptyIfNil(e.Gaps),
-		Suggestions: emptyIfNil(e.Suggestions),
+		Suggestions: make([]SuggestionDTO, 0, len(e.Suggestions)),
 	}
 	for _, d := range e.Dimensions {
 		resp.Dimensions = append(resp.Dimensions, DimensionDTO{
@@ -167,6 +176,14 @@ func NewEvaluationResponse(status string, e *model.Evaluation) EvaluationRespons
 			Score:    d.Score,
 			Max:      d.Max,
 			Evidence: d.Evidence,
+		})
+	}
+	for _, s := range e.Suggestions {
+		resp.Suggestions = append(resp.Suggestions, SuggestionDTO{
+			Text:          s.Text,
+			Section:       s.Section,
+			Dimension:     s.Dimension,
+			EstimatedLift: s.EstimatedLift,
 		})
 	}
 	return resp

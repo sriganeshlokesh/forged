@@ -66,7 +66,22 @@ type Evaluation struct {
 	Dimensions  []Dimension
 	Strengths   []string
 	Gaps        []string
-	Suggestions []string
+	Suggestions []Suggestion
+}
+
+// Suggestion is one concrete resume edit, with the resume section to change,
+// the rubric dimension it improves, and a realistic estimated score gain.
+// Cumulative lifts per dimension never exceed that dimension's remaining
+// headroom (max - awarded score); normalization enforces this.
+type Suggestion struct {
+	Text string
+	// Section is the resume section to edit:
+	// summary | experience | projects | education | skills ("" when unknown).
+	Section string
+	// Dimension is the rubric dimension key the edit improves ("" when unknown).
+	Dimension string
+	// EstimatedLift is the estimated score gain if the edit is applied.
+	EstimatedLift int
 }
 
 // Dimension is one rubric axis with the evidence justifying its score.

@@ -34,6 +34,6 @@ func (s *StubEvaluator) Evaluate(_ context.Context, _ string, _ *model.Resume) (
 		},
 		Strengths:   []string{},
 		Gaps:        []string{},
-		Suggestions: []string{},
+		Suggestions: []model.Suggestion{},
 	}, nil
 }

@@ -19,7 +19,16 @@ type Evaluation struct {
 	Dimensions  []Dimension
 	Strengths   []string
 	Gaps        []string
-	Suggestions []string
+	Suggestions []Suggestion
+}
+
+// Suggestion is one concrete resume edit: the section to change, the rubric
+// dimension it improves, and the estimated score gain if applied.
+type Suggestion struct {
+	Text          string
+	Section       string
+	Dimension     string
+	EstimatedLift int
 }
 
 // Dimension is one scored axis of an evaluation (e.g. skills match),

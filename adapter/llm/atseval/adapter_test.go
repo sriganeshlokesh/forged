@@ -28,9 +28,11 @@ func TestAdapter_Evaluate_MapsDomainTypes(t *testing.T) {
 			Dimensions: []atseval.Dimension{
 				{Key: "skills_match", Label: "Skills match", Score: 35, Max: 35, Evidence: "Go"},
 			},
-			Strengths:   []string{"s"},
-			Gaps:        []string{"g"},
-			Suggestions: []string{"fix"},
+			Strengths: []string{"s"},
+			Gaps:      []string{"g"},
+			Suggestions: []atseval.Suggestion{
+				{Text: "fix", Section: "skills", Dimension: "skills_match", EstimatedLift: 3},
+			},
 		}, nil)
 
 	a := llmats.New(engine, slog.Default())
@@ -48,7 +50,8 @@ func TestAdapter_Evaluate_MapsDomainTypes(t *testing.T) {
 	if len(eval.Dimensions) != 1 || eval.Dimensions[0].Key != "skills_match" {
 		t.Errorf("unexpected dimensions: %+v", eval.Dimensions)
 	}
-	if len(eval.Suggestions) != 1 || eval.Suggestions[0] != "fix" {
+	if len(eval.Suggestions) != 1 || eval.Suggestions[0].Text != "fix" ||
+		eval.Suggestions[0].Section != "skills" || eval.Suggestions[0].EstimatedLift != 3 {
 		t.Errorf("unexpected suggestions: %+v", eval.Suggestions)
 	}
 }

@@ -38,7 +38,11 @@ Hard rules:
 - A skill merely listed in a skills section with no supporting experience or project evidence scores in the low band for that skill.
 - Ignore the candidate's name, demographics, institution prestige, GPA, and location. Never mention them.
 - "gaps" are requirements from the job description the resume does not demonstrate.
-- "suggestions" must be concrete and actionable, referencing specific bullets or sections of this resume (e.g. "Quantify the Acme migration bullet with request volume or latency numbers"), not generic advice.
+- Provide 3-6 "suggestions": concrete, actionable resume edits referencing specific bullets or sections of this resume (e.g. "Quantify the Acme migration bullet with request volume or latency numbers"), never generic advice. For each suggestion:
+  - "section" is the resume section the user should edit: one of "summary", "experience", "projects", "education", "skills".
+  - "dimension" is the rubric dimension the edit improves: one of "skills_match", "experience_relevance", "impact_evidence", "education_extras".
+  - "estimated_lift" is a realistic estimate of the score points gained if the edit is applied. The sum of estimated_lift values for a given dimension must not exceed that dimension's remaining headroom (its max minus the score you awarded).
+  - Order suggestions by estimated_lift, highest first.
 - The overall "score" must equal the sum of the four dimension scores.
 
 Respond with a single JSON object exactly matching this shape (no markdown, no commentary):
@@ -53,7 +57,9 @@ Respond with a single JSON object exactly matching this shape (no markdown, no c
   ],
   "strengths": ["..."],
   "gaps": ["..."],
-  "suggestions": ["..."]
+  "suggestions": [
+    {"text": "...", "section": "skills", "dimension": "skills_match", "estimated_lift": <int>}
+  ]
 }`
 
 // userPrompt renders the job description and resume into the user message.
