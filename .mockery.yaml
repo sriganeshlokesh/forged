@@ -16,6 +16,7 @@ packages:
   github.com/sriganeshlokesh/forged/api/http/handle:
     interfaces:
       EvaluationUseCase:
+      RevisionUseCase:
   github.com/sriganeshlokesh/forged/adapter/llm/atseval:
     interfaces:
       Engine:

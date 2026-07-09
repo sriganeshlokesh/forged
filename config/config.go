@@ -35,6 +35,10 @@ type Config struct {
 	// evaluations endpoint. 0 disables rate limiting.
 	RateLimitPerIPRPM int
 
+	// RateLimitRevisionsPerIPRPM caps requests per minute per client IP on the
+	// revisions endpoint. 0 disables rate limiting.
+	RateLimitRevisionsPerIPRPM int
+
 	// CORSAllowedOrigins is the list of browser origins allowed to call the
 	// API cross-origin. Empty disables CORS entirely.
 	CORSAllowedOrigins []string
@@ -74,6 +78,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("RATE_LIMIT_PER_IP_RPM must be a non-negative integer, got %q", rateLimitRPM)
 	}
 
+	rateLimitRevisionsRPM := getEnv("RATE_LIMIT_REVISIONS_PER_IP_RPM", "20")
+	revisionsRPM, err := strconv.Atoi(rateLimitRevisionsRPM)
+	if err != nil || revisionsRPM < 0 {
+		return nil, fmt.Errorf("RATE_LIMIT_REVISIONS_PER_IP_RPM must be a non-negative integer, got %q", rateLimitRevisionsRPM)
+	}
+
 	var corsOrigins []string
 	if raw := getEnv("CORS_ALLOWED_ORIGINS", ""); raw != "" {
 		for _, part := range strings.Split(raw, ",") {
@@ -84,21 +94,22 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		ServiceName:        getEnv("SERVICE_NAME", "forged"),
-		Env:                getEnv("APP_ENV", "development"),
-		Port:               port,
-		LogLevel:           getEnv("LOG_LEVEL", "info"),
-		ReadTimeout:        readTimeout,
-		WriteTimeout:       writeTimeout,
-		IdleTimeout:        idleTimeout,
-		ShutdownTimeout:    shutdownTimeout,
-		Version:            Version,
-		LLMBaseURL:         getEnv("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
-		LLMAPIKey:          getEnv("LLM_API_KEY", ""),
-		LLMModel:           getEnv("LLM_MODEL", "llama-3.3-70b-versatile"),
-		LLMTimeout:         llmTimeout,
-		RateLimitPerIPRPM:  rpm,
-		CORSAllowedOrigins: corsOrigins,
+		ServiceName:                getEnv("SERVICE_NAME", "forged"),
+		Env:                        getEnv("APP_ENV", "development"),
+		Port:                       port,
+		LogLevel:                   getEnv("LOG_LEVEL", "info"),
+		ReadTimeout:                readTimeout,
+		WriteTimeout:               writeTimeout,
+		IdleTimeout:                idleTimeout,
+		ShutdownTimeout:            shutdownTimeout,
+		Version:                    Version,
+		LLMBaseURL:                 getEnv("LLM_BASE_URL", "https://api.groq.com/openai/v1"),
+		LLMAPIKey:                  getEnv("LLM_API_KEY", ""),
+		LLMModel:                   getEnv("LLM_MODEL", "llama-3.3-70b-versatile"),
+		LLMTimeout:                 llmTimeout,
+		RateLimitPerIPRPM:          rpm,
+		RateLimitRevisionsPerIPRPM: revisionsRPM,
+		CORSAllowedOrigins:         corsOrigins,
 	}, nil
 }
 

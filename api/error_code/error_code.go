@@ -33,4 +33,5 @@ var (
 	ErrRateLimited   = New(10003, "too many requests", 429)
 	ErrInternal      = New(30001, "internal error", 500)
 	ErrEvaluation    = New(30002, "evaluation service unavailable", 503)
+	ErrRevision      = New(30003, "revision service unavailable", 503)
 )

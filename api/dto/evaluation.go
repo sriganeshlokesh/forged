@@ -1,6 +1,21 @@
 package dto
 
-import "github.com/sriganeshlokesh/forged/domain/model"
+import (
+	"regexp"
+
+	"github.com/sriganeshlokesh/forged/domain/model"
+)
+
+// itemIDRe accepts short opaque item IDs; anything else is treated as absent.
+var itemIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// cleanItemID returns id when it matches the allowed shape, otherwise "".
+func cleanItemID(id string) string {
+	if itemIDRe.MatchString(id) {
+		return id
+	}
+	return ""
+}
 
 // EvaluationRequest is the JSON request body for POST /v1/evaluations.
 type EvaluationRequest struct {
@@ -26,6 +41,7 @@ type ResumeDTO struct {
 
 // ExperienceDTO is a single work-experience entry.
 type ExperienceDTO struct {
+	ID         string `json:"id,omitempty"`
 	Company    string `json:"company"`
 	Role       string `json:"role"`
 	Employment string `json:"employment"`
@@ -37,6 +53,7 @@ type ExperienceDTO struct {
 
 // ProjectDTO is a single project entry.
 type ProjectDTO struct {
+	ID          string   `json:"id,omitempty"`
 	Name        string   `json:"name"`
 	Link        string   `json:"link"`
 	Description string   `json:"description"`
@@ -45,6 +62,7 @@ type ProjectDTO struct {
 
 // EducationDTO is a single education entry.
 type EducationDTO struct {
+	ID           string               `json:"id,omitempty"`
 	School       string               `json:"school"`
 	Degree       string               `json:"degree"`
 	Start        string               `json:"start"`
@@ -60,6 +78,7 @@ type EducationDetailDTO struct {
 
 // SkillGroupDTO groups related skills under a shared label.
 type SkillGroupDTO struct {
+	ID    string   `json:"id,omitempty"`
 	Label string   `json:"label"`
 	Items []string `json:"items"`
 }
@@ -83,6 +102,7 @@ func (r *ResumeDTO) ToModel() *model.Resume {
 
 	for _, e := range r.Experience {
 		resume.Experience = append(resume.Experience, model.Experience{
+			ID:         cleanItemID(e.ID),
 			Company:    e.Company,
 			Role:       e.Role,
 			Employment: e.Employment,
@@ -95,6 +115,7 @@ func (r *ResumeDTO) ToModel() *model.Resume {
 
 	for _, p := range r.Projects {
 		resume.Projects = append(resume.Projects, model.Project{
+			ID:          cleanItemID(p.ID),
 			Name:        p.Name,
 			Link:        p.Link,
 			Description: p.Description,
@@ -104,6 +125,7 @@ func (r *ResumeDTO) ToModel() *model.Resume {
 
 	for _, ed := range r.Education {
 		edm := model.Education{
+			ID:     cleanItemID(ed.ID),
 			School: ed.School,
 			Degree: ed.Degree,
 			Start:  ed.Start,
@@ -120,6 +142,7 @@ func (r *ResumeDTO) ToModel() *model.Resume {
 
 	for _, sg := range r.SkillGroups {
 		resume.SkillGroups = append(resume.SkillGroups, model.SkillGroup{
+			ID:    cleanItemID(sg.ID),
 			Label: sg.Label,
 			Items: sg.Items,
 		})
@@ -139,13 +162,27 @@ type EvaluationResponse struct {
 	Suggestions []SuggestionDTO `json:"suggestions"`
 }
 
+// ActionTargetDTO locates the exact resume field a suggestion action rewrites.
+type ActionTargetDTO struct {
+	Section string `json:"section"`
+	ItemID  string `json:"item_id"`
+	Field   string `json:"field"`
+}
+
+// SuggestionActionDTO is the machine-actionable part of a suggestion.
+type SuggestionActionDTO struct {
+	Type   string          `json:"type"`
+	Target ActionTargetDTO `json:"target"`
+}
+
 // SuggestionDTO is one suggested resume edit with its estimated score lift
 // and the resume section the frontend should jump to.
 type SuggestionDTO struct {
-	Text          string `json:"text"`
-	Section       string `json:"section"`
-	Dimension     string `json:"dimension"`
-	EstimatedLift int    `json:"estimated_lift"`
+	Text          string               `json:"text"`
+	Section       string               `json:"section"`
+	Dimension     string               `json:"dimension"`
+	EstimatedLift int                  `json:"estimated_lift"`
+	Action        *SuggestionActionDTO `json:"action,omitempty"`
 }
 
 // DimensionDTO is one scored rubric axis in an evaluation response.
@@ -179,12 +216,23 @@ func NewEvaluationResponse(status string, e *model.Evaluation) EvaluationRespons
 		})
 	}
 	for _, s := range e.Suggestions {
-		resp.Suggestions = append(resp.Suggestions, SuggestionDTO{
+		sug := SuggestionDTO{
 			Text:          s.Text,
 			Section:       s.Section,
 			Dimension:     s.Dimension,
 			EstimatedLift: s.EstimatedLift,
-		})
+		}
+		if s.Action != nil {
+			sug.Action = &SuggestionActionDTO{
+				Type: string(s.Action.Type),
+				Target: ActionTargetDTO{
+					Section: s.Action.Target.Section,
+					ItemID:  s.Action.Target.ItemID,
+					Field:   s.Action.Target.Field,
+				},
+			}
+		}
+		resp.Suggestions = append(resp.Suggestions, sug)
 	}
 	return resp
 }
