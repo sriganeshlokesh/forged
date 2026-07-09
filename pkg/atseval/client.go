@@ -79,9 +79,9 @@ const evaluationSchema = `{
                   "target": {
                     "type": "object",
                     "properties": {
-                      "section": {"type": "string"},
+                      "section": {"type": "string", "enum": ["summary", "experience", "projects"]},
                       "item_id": {"type": "string"},
-                      "field": {"type": "string"}
+                      "field": {"type": "string", "enum": ["summary", "bullets", "description"]}
                     },
                     "required": ["section", "item_id", "field"],
                     "additionalProperties": false

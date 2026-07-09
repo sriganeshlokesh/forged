@@ -4,6 +4,7 @@ package revision
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/sriganeshlokesh/forged/application/core"
@@ -90,6 +91,7 @@ func (uc *UseCase) Execute(ctx context.Context, in core.Input) (core.Output, err
 	after := service.SanitizeHTML(draft)
 	verr := validateDraft(req.TargetField, req.TargetContent, after)
 	if verr != nil {
+		slog.Default().Warn("revision: guardrail rejected first draft, retrying", "field", req.TargetField, "guardrail", guardrailKind(verr))
 		spec.Feedback = verr.Error()
 		draft, rationale, err = uc.reviser.Revise(ctx, spec)
 		if err != nil {
@@ -97,6 +99,7 @@ func (uc *UseCase) Execute(ctx context.Context, in core.Input) (core.Output, err
 		}
 		after = service.SanitizeHTML(draft)
 		if verr = validateDraft(req.TargetField, req.TargetContent, after); verr != nil {
+			slog.Default().Warn("revision: guardrail rejected retry draft, failing", "field", req.TargetField, "guardrail", guardrailKind(verr))
 			return nil, fmt.Errorf("%w: %v", model.ErrRevisionFailed, verr)
 		}
 	}
@@ -118,4 +121,14 @@ func validateDraft(field, before, after string) error {
 		return err
 	}
 	return service.CheckNoNewNumbers(before, after, nil)
+}
+
+// guardrailKind classifies a guardrail failure for content-free logging:
+// "numbers" for a fabricated-number rejection, "shape" for a structural one.
+// It deliberately avoids logging the offending token, which may echo résumé content.
+func guardrailKind(err error) string {
+	if err != nil && strings.Contains(err.Error(), "numeric token") {
+		return "numbers"
+	}
+	return "shape"
 }

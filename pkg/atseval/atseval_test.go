@@ -278,3 +278,220 @@ func TestStripHTML(t *testing.T) {
 		})
 	}
 }
+
+// testResumeWithIDs returns a Resume with known item IDs for action target tests.
+func testResumeWithIDs() Resume {
+	return Resume{
+		Summary: "Backend engineer",
+		Experience: []Experience{
+			{ID: "a1b2c3", Company: "Acme", Role: "SWE", Present: true, Bullets: "Built X"},
+			{ID: "d4e5f6", Company: "Beta", Role: "Lead", Present: false, Bullets: "Led Y"},
+		},
+		Projects: []Project{
+			{ID: "p9q8r7", Name: "MyProject", Description: "Cool stuff"},
+		},
+		SkillGroups: []SkillGroup{{Label: "Languages", Items: []string{"Go"}}},
+	}
+}
+
+func TestNormalizeActionTarget(t *testing.T) {
+	tests := []struct {
+		name              string
+		target            ActionTarget
+		suggestionSection string
+		want              ActionTarget
+	}{
+		{
+			name:              "fully specified valid experience action",
+			target:            ActionTarget{Section: "experience", ItemID: "a1b2c3", Field: "bullets"},
+			suggestionSection: "experience",
+			want:              ActionTarget{Section: "experience", ItemID: "a1b2c3", Field: "bullets"},
+		},
+		{
+			name:              "exp: prefix stripped",
+			target:            ActionTarget{Section: "experience", ItemID: "exp:a1b2c3", Field: "bullets"},
+			suggestionSection: "experience",
+			want:              ActionTarget{Section: "experience", ItemID: "a1b2c3", Field: "bullets"},
+		},
+		{
+			name:              "bracketed [exp:UUID] stripped",
+			target:            ActionTarget{Section: "", ItemID: "[exp:a1b2c3]", Field: ""},
+			suggestionSection: "experience",
+			want:              ActionTarget{Section: "experience", ItemID: "a1b2c3", Field: "bullets"},
+		},
+		{
+			name:              "only item_id with exp: prefix, section and field absent",
+			target:            ActionTarget{Section: "", ItemID: "exp:a1b2c3", Field: ""},
+			suggestionSection: "",
+			want:              ActionTarget{Section: "experience", ItemID: "a1b2c3", Field: "bullets"},
+		},
+		{
+			name:              "prj: prefix maps to projects/description",
+			target:            ActionTarget{Section: "", ItemID: "prj:p9q8r7", Field: ""},
+			suggestionSection: "projects",
+			want:              ActionTarget{Section: "projects", ItemID: "p9q8r7", Field: "description"},
+		},
+		{
+			name:              "summary action blanks item_id",
+			target:            ActionTarget{Section: "summary", ItemID: "some-stray-id", Field: "summary"},
+			suggestionSection: "summary",
+			want:              ActionTarget{Section: "summary", ItemID: "", Field: "summary"},
+		},
+		{
+			name:              "edu: prefix maps to education but not an actionSection",
+			target:            ActionTarget{Section: "", ItemID: "edu:abc123", Field: ""},
+			suggestionSection: "education",
+			want:              ActionTarget{Section: "education", ItemID: "abc123", Field: ""},
+		},
+		{
+			name:              "unknown prefix preserved as-is",
+			target:            ActionTarget{Section: "experience", ItemID: "foo:bar", Field: "bullets"},
+			suggestionSection: "experience",
+			want:              ActionTarget{Section: "experience", ItemID: "foo:bar", Field: "bullets"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeActionTarget(tt.target, tt.suggestionSection)
+			if got != tt.want {
+				t.Errorf("normalizeActionTarget(%+v, %q) = %+v, want %+v", tt.target, tt.suggestionSection, got, tt.want)
+			}
+		})
+	}
+}
+
+// evalJSONWithAction builds a complete evaluation JSON with a single suggestion
+// that has the given action JSON inline.
+func evalJSONWithAction(actionJSON string) string {
+	return `{
+		"score": 55,
+		"summary": "Decent match.",
+		"dimensions": [
+			{"key": "impact_evidence", "label": "Impact and evidence", "score": 12, "max": 20, "evidence": "Quantified bullets"}
+		],
+		"strengths": ["Strong Go background"],
+		"gaps": ["No Kubernetes"],
+		"suggestions": [
+			{"text": "Improve bullets", "section": "experience", "dimension": "impact_evidence", "estimated_lift": 4, "action": ` + actionJSON + `}
+		]
+	}`
+}
+
+func TestResolveAction_IntegrationCases(t *testing.T) {
+	resume := testResumeWithIDs()
+	knownIDs := knownItemIDs(resume)
+
+	tests := []struct {
+		name          string
+		actionJSON    string
+		wantActionNil bool
+		wantDropped   bool
+		wantItemID    string
+		wantSection   string
+		wantField     string
+	}{
+		{
+			name:          "fully specified valid action survives",
+			actionJSON:    `{"type":"rewrite_field","target":{"section":"experience","item_id":"a1b2c3","field":"bullets"}}`,
+			wantActionNil: false,
+			wantItemID:    "a1b2c3",
+			wantSection:   "experience",
+			wantField:     "bullets",
+		},
+		{
+			name:          "exp: prefix stripped and survives",
+			actionJSON:    `{"type":"rewrite_field","target":{"section":"experience","item_id":"exp:a1b2c3","field":"bullets"}}`,
+			wantActionNil: false,
+			wantItemID:    "a1b2c3",
+			wantSection:   "experience",
+			wantField:     "bullets",
+		},
+		{
+			name:          "bracketed [exp:UUID] survives",
+			actionJSON:    `{"type":"rewrite_field","target":{"section":"experience","item_id":"[exp:a1b2c3]","field":"bullets"}}`,
+			wantActionNil: false,
+			wantItemID:    "a1b2c3",
+			wantSection:   "experience",
+			wantField:     "bullets",
+		},
+		{
+			name:          "only exp: item_id no section/field inferred",
+			actionJSON:    `{"type":"rewrite_field","target":{"section":"","item_id":"exp:a1b2c3","field":""}}`,
+			wantActionNil: false,
+			wantItemID:    "a1b2c3",
+			wantSection:   "experience",
+			wantField:     "bullets",
+		},
+		{
+			name:          "prj: prefix maps to projects/description survives",
+			actionJSON:    `{"type":"rewrite_field","target":{"section":"","item_id":"prj:p9q8r7","field":""}}`,
+			wantActionNil: false,
+			wantItemID:    "p9q8r7",
+			wantSection:   "projects",
+			wantField:     "description",
+		},
+		{
+			name:          "summary with stray item_id blanked and survives",
+			actionJSON:    `{"type":"rewrite_field","target":{"section":"summary","item_id":"stray-id","field":"summary"}}`,
+			wantActionNil: false,
+			wantItemID:    "",
+			wantSection:   "summary",
+			wantField:     "summary",
+		},
+		{
+			name:          "unknown id after stripping is dropped",
+			actionJSON:    `{"type":"rewrite_field","target":{"section":"experience","item_id":"exp:unknown-id-xyz","field":"bullets"}}`,
+			wantActionNil: true,
+			wantDropped:   true,
+		},
+		{
+			name:          "edu: prefix not an action section is dropped",
+			actionJSON:    `{"type":"rewrite_field","target":{"section":"education","item_id":"edu:abc123","field":"degree"}}`,
+			wantActionNil: true,
+			wantDropped:   true,
+		},
+		{
+			name:          "null action survives with nil action",
+			actionJSON:    `null`,
+			wantActionNil: true,
+			wantDropped:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(chatBody(evalJSONWithAction(tt.actionJSON))))
+			}))
+			defer srv.Close()
+
+			eval, err := newTestEvaluator(srv.URL).Evaluate(context.Background(), "Go engineer", resume)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(eval.Suggestions) != 1 {
+				t.Fatalf("expected 1 suggestion, got %d", len(eval.Suggestions))
+			}
+			sug := eval.Suggestions[0]
+			if tt.wantActionNil {
+				if sug.Action != nil {
+					t.Errorf("expected nil action, got %+v", sug.Action)
+				}
+			} else {
+				if sug.Action == nil {
+					t.Fatal("expected non-nil action, got nil")
+				}
+				if sug.Action.Target.ItemID != tt.wantItemID {
+					t.Errorf("item_id: got %q, want %q", sug.Action.Target.ItemID, tt.wantItemID)
+				}
+				if sug.Action.Target.Section != tt.wantSection {
+					t.Errorf("section: got %q, want %q", sug.Action.Target.Section, tt.wantSection)
+				}
+				if sug.Action.Target.Field != tt.wantField {
+					t.Errorf("field: got %q, want %q", sug.Action.Target.Field, tt.wantField)
+				}
+			}
+			_ = knownIDs // used in the test setup
+		})
+	}
+}

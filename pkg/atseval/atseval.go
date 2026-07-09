@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -18,6 +20,23 @@ var (
 	// into a valid evaluation even after a retry.
 	ErrBadResponse = errors.New("atseval: model returned an unusable response")
 )
+
+// markerPrefixToSection maps the bracketed marker prefixes rendered in the
+// prompt ([exp:...], [prj:...], ...) back to the section they imply.
+var markerPrefixToSection = map[string]string{
+	"exp": "experience", "prj": "projects", "edu": "education", "skill": "skills",
+}
+
+// canonicalField is the single rewrite field permitted per action section.
+var canonicalField = map[string]string{
+	"summary": "summary", "experience": "bullets", "projects": "description",
+}
+
+// actionSections are the sections a Phase-1 rewrite_field action may target.
+var actionSections = map[string]bool{"summary": true, "experience": true, "projects": true}
+
+// atsevalItemIDRe mirrors the DTO item-id hygiene rule (opaque client ids).
+var atsevalItemIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 // Options configures an Evaluator. BaseURL and Model are required.
 // APIKey may be empty for endpoints without auth (e.g. local Ollama).
@@ -129,6 +148,84 @@ func validActionTarget(t ActionTarget, knownIDs map[string]bool) bool {
 	}
 }
 
+// normalizeActionTarget strips prompt-rendered marker prefixes and brackets
+// from an action target, infers missing section/field from context, and
+// enforces canonical field values. It does NOT fabricate item IDs.
+func normalizeActionTarget(t ActionTarget, suggestionSection string) ActionTarget {
+	// Strip surrounding brackets and whitespace from the item id.
+	id := strings.Trim(strings.TrimSpace(t.ItemID), "[]")
+
+	// If id contains ":", split on first ":" and check if the left part is a
+	// known marker prefix. If so, record the implied section and take the right
+	// part as the bare id.
+	var prefixSection string
+	if idx := strings.Index(id, ":"); idx >= 0 {
+		prefix := strings.ToLower(id[:idx])
+		if sec, ok := markerPrefixToSection[prefix]; ok {
+			prefixSection = sec
+			id = id[idx+1:]
+			// After stripping a known prefix, reject ids that don't match the
+			// opaque-id format so they cleanly fail the knownIDs check.
+			if id != "" && !atsevalItemIDRe.MatchString(id) {
+				id = ""
+			}
+		}
+		// If the prefix is unknown, leave id as-is (don't strip arbitrary colons).
+	}
+
+	// Resolve section: prefer t.Section if it's a valid action section,
+	// then fall back to prefixSection, then suggestionSection.
+	section := t.Section
+	if !actionSections[section] {
+		if prefixSection != "" {
+			section = prefixSection
+		} else if actionSections[suggestionSection] {
+			section = suggestionSection
+		}
+	}
+
+	// Resolve field: use canonical field for the section if known.
+	field := t.Field
+	if cf, ok := canonicalField[section]; ok && field != cf {
+		field = cf
+	}
+
+	// Summary actions must have an empty item_id.
+	if section == "summary" {
+		id = ""
+	}
+
+	return ActionTarget{Section: section, ItemID: id, Field: field}
+}
+
+// suggestionActionJSON is the shape of an action object in the model's JSON reply.
+type suggestionActionJSON struct {
+	Type   string `json:"type"`
+	Target struct {
+		Section string `json:"section"`
+		ItemID  string `json:"item_id"`
+		Field   string `json:"field"`
+	} `json:"target"`
+}
+
+// resolveAction normalizes and validates a raw suggestion action. It returns
+// (nil, false) when no actionable action is present, (action, false) when a
+// valid action survives, and (nil, true) when a present action was dropped.
+func resolveAction(raw *suggestionActionJSON, suggestionSection string, knownIDs map[string]bool) (*SuggestionAction, bool) {
+	if raw == nil || raw.Type != "rewrite_field" {
+		return nil, false
+	}
+	t := normalizeActionTarget(ActionTarget{
+		Section: raw.Target.Section,
+		ItemID:  raw.Target.ItemID,
+		Field:   raw.Target.Field,
+	}, suggestionSection)
+	if validActionTarget(t, knownIDs) {
+		return &SuggestionAction{Type: raw.Type, Target: t}, false
+	}
+	return nil, true
+}
+
 // parseEvaluation parses and normalizes the model's JSON reply.
 // knownIDs is the set of item IDs present in the resume, used to validate suggestion actions.
 func parseEvaluation(content string, knownIDs map[string]bool) (*Evaluation, error) {
@@ -145,18 +242,11 @@ func parseEvaluation(content string, knownIDs map[string]bool) (*Evaluation, err
 		Strengths   []string `json:"strengths"`
 		Gaps        []string `json:"gaps"`
 		Suggestions []struct {
-			Text          string `json:"text"`
-			Section       string `json:"section"`
-			Dimension     string `json:"dimension"`
-			EstimatedLift int    `json:"estimated_lift"`
-			Action        *struct {
-				Type   string `json:"type"`
-				Target struct {
-					Section string `json:"section"`
-					ItemID  string `json:"item_id"`
-					Field   string `json:"field"`
-				} `json:"target"`
-			} `json:"action"`
+			Text          string                `json:"text"`
+			Section       string                `json:"section"`
+			Dimension     string                `json:"dimension"`
+			EstimatedLift int                   `json:"estimated_lift"`
+			Action        *suggestionActionJSON `json:"action"`
 		} `json:"suggestions"`
 	}
 	if err := json.Unmarshal([]byte(extractJSON(content)), &out); err != nil {
@@ -196,6 +286,7 @@ func parseEvaluation(content string, knownIDs map[string]bool) (*Evaluation, err
 	eval.Score = clamp(sum, 0, 100)
 
 	unknownBudget := 100 - eval.Score
+	droppedActions := 0
 	for _, s := range out.Suggestions {
 		text := strings.TrimSpace(s.Text)
 		if text == "" {
@@ -213,15 +304,10 @@ func parseEvaluation(content string, knownIDs map[string]bool) (*Evaluation, err
 			lift = clamp(lift, 0, budget)
 			headroom[s.Dimension] -= lift
 			sug := Suggestion{Text: text, Section: section, Dimension: s.Dimension, EstimatedLift: lift}
-			if s.Action != nil && s.Action.Type == "rewrite_field" {
-				t := ActionTarget{
-					Section: s.Action.Target.Section,
-					ItemID:  s.Action.Target.ItemID,
-					Field:   s.Action.Target.Field,
-				}
-				if validActionTarget(t, knownIDs) {
-					sug.Action = &SuggestionAction{Type: s.Action.Type, Target: t}
-				}
+			act, dropped := resolveAction(s.Action, s.Section, knownIDs)
+			sug.Action = act
+			if dropped {
+				droppedActions++
 			}
 			eval.Suggestions = append(eval.Suggestions, sug)
 			continue
@@ -229,17 +315,15 @@ func parseEvaluation(content string, knownIDs map[string]bool) (*Evaluation, err
 		lift = clamp(lift, 0, unknownBudget)
 		unknownBudget -= lift
 		sug := Suggestion{Text: text, Section: section, Dimension: "", EstimatedLift: lift}
-		if s.Action != nil && s.Action.Type == "rewrite_field" {
-			t := ActionTarget{
-				Section: s.Action.Target.Section,
-				ItemID:  s.Action.Target.ItemID,
-				Field:   s.Action.Target.Field,
-			}
-			if validActionTarget(t, knownIDs) {
-				sug.Action = &SuggestionAction{Type: s.Action.Type, Target: t}
-			}
+		act, dropped := resolveAction(s.Action, s.Section, knownIDs)
+		sug.Action = act
+		if dropped {
+			droppedActions++
 		}
 		eval.Suggestions = append(eval.Suggestions, sug)
+	}
+	if droppedActions > 0 {
+		slog.Debug("atseval: dropped invalid suggestion actions", "count", droppedActions)
 	}
 	return eval, nil
 }

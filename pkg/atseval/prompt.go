@@ -43,7 +43,7 @@ Hard rules:
   - "dimension" is the rubric dimension the edit improves: one of "skills_match", "experience_relevance", "impact_evidence", "education_extras".
   - "estimated_lift" is a realistic estimate of the score points gained if the edit is applied. The sum of estimated_lift values for a given dimension must not exceed that dimension's remaining headroom (its max minus the score you awarded).
   - Order suggestions by estimated_lift, highest first.
-  - When a suggestion targets one specific entry, include an "action" of type "rewrite_field" whose "target.item_id" is the bracketed id shown in the resume (e.g. "[exp:a1b2c3]" → "a1b2c3"). Valid targets: section "summary" with field "summary" and empty item_id; section "experience" with field "bullets"; section "projects" with field "description". If a suggestion has no single target, set "action" to null.
+  - When a suggestion targets one specific entry, include an "action" of type "rewrite_field". The "target" MUST include all three fields: "section", "item_id", and "field". The "target.item_id" MUST be the BARE id only — strip the prefix and brackets entirely (e.g. "[exp:a1b2c3]" → "a1b2c3", NEVER "exp:a1b2c3"). Valid targets: section "summary" with field "summary" and empty item_id; section "experience" with field "bullets"; section "projects" with field "description". If a suggestion has no single target, set "action" to null.
 - The overall "score" must equal the sum of the four dimension scores.
 
 Respond with a single JSON object exactly matching this shape (no markdown, no commentary):
@@ -59,7 +59,8 @@ Respond with a single JSON object exactly matching this shape (no markdown, no c
   "strengths": ["..."],
   "gaps": ["..."],
   "suggestions": [
-    {"text": "...", "section": "skills", "dimension": "skills_match", "estimated_lift": <int>, "action": null}
+    {"text": "...", "section": "experience", "dimension": "impact_evidence", "estimated_lift": 4, "action": {"type": "rewrite_field", "target": {"section": "experience", "item_id": "a1b2c3", "field": "bullets"}}},
+    {"text": "...", "section": "skills", "dimension": "skills_match", "estimated_lift": 2, "action": null}
   ]
 }`
 
