@@ -16,7 +16,7 @@ import (
 	"github.com/sriganeshlokesh/forged/domain/model"
 )
 
-// StubEvaluator is a no-op implementation of service.IResumeEvaluator.
+// StubEvaluator is a no-op implementation of evaluation.ResumeEvaluator.
 type StubEvaluator struct{}
 
 // NewStubEvaluator constructs a StubEvaluator.
