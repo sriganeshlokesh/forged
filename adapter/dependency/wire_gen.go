@@ -11,6 +11,7 @@ import (
 	http2 "github.com/sriganeshlokesh/forged/api/http"
 	"github.com/sriganeshlokesh/forged/api/http/handle"
 	"github.com/sriganeshlokesh/forged/application/evaluation"
+	"github.com/sriganeshlokesh/forged/application/revision"
 	"github.com/sriganeshlokesh/forged/config"
 	"log/slog"
 	"net/http"
@@ -25,7 +26,10 @@ func InitializeServer(cfg *config.Config, logger *slog.Logger) *http.Server {
 	resumeEvaluator := ProvideEvaluator(cfg, logger)
 	useCase := evaluation.NewUseCase(resumeEvaluator)
 	evaluationHandler := handle.NewEvaluationHandler(useCase, logger)
-	handler := http2.NewRouter(cfg, logger, healthHandler, evaluationHandler)
+	resumeReviser := ProvideReviser(cfg, logger)
+	revisionUseCase := revision.NewUseCase(resumeReviser)
+	revisionHandler := handle.NewRevisionHandler(revisionUseCase, logger)
+	handler := http2.NewRouter(cfg, logger, healthHandler, evaluationHandler, revisionHandler)
 	server := http2.NewServer(cfg, handler, logger)
 	return server
 }
@@ -34,4 +38,6 @@ func InitializeServer(cfg *config.Config, logger *slog.Logger) *http.Server {
 
 // ServerSet groups the providers needed to build an *http.Server.
 // Consumer-declared interfaces are bound to their implementations here.
-var ServerSet = wire.NewSet(handle.NewHealthHandler, handle.NewEvaluationHandler, evaluation.NewUseCase, ProvideEvaluator, http2.NewRouter, http2.NewServer, wire.Bind(new(handle.EvaluationUseCase), new(*evaluation.UseCase)), wire.Bind(new(http2.HealthRoutes), new(*handle.HealthHandler)), wire.Bind(new(http2.EvaluationRoutes), new(*handle.EvaluationHandler)))
+var ServerSet = wire.NewSet(handle.NewHealthHandler, handle.NewEvaluationHandler, handle.NewRevisionHandler, evaluation.NewUseCase, revision.NewUseCase, ProvideEvaluator,
+	ProvideReviser, http2.NewRouter, http2.NewServer, wire.Bind(new(handle.EvaluationUseCase), new(*evaluation.UseCase)), wire.Bind(new(handle.RevisionUseCase), new(*revision.UseCase)), wire.Bind(new(http2.HealthRoutes), new(*handle.HealthHandler)), wire.Bind(new(http2.EvaluationRoutes), new(*handle.EvaluationHandler)), wire.Bind(new(http2.RevisionRoutes), new(*handle.RevisionHandler)),
+)

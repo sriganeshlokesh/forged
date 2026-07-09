@@ -23,12 +23,18 @@ type EvaluationRoutes interface {
 	Evaluate(w http.ResponseWriter, r *http.Request)
 }
 
+// RevisionRoutes is what the router needs from the revision handler.
+// Satisfied implicitly by *handle.RevisionHandler.
+type RevisionRoutes interface {
+	Revise(w http.ResponseWriter, r *http.Request)
+}
+
 // NewRouter constructs a chi router with the standard middleware stack and all routes registered.
 // Middleware order: RequestID → RealIP → RequestLogger → Recoverer → CORS.
 // CORS is placed after Recoverer so that preflight OPTIONS requests receive
 // the correct headers even when other middleware panics or rejects the request.
 // RequestLogger is placed before Recoverer so that panics are logged as 500s with full duration.
-func NewRouter(cfg *config.Config, logger *slog.Logger, health HealthRoutes, eval EvaluationRoutes) http.Handler {
+func NewRouter(cfg *config.Config, logger *slog.Logger, health HealthRoutes, eval EvaluationRoutes, rev RevisionRoutes) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
@@ -41,6 +47,8 @@ func NewRouter(cfg *config.Config, logger *slog.Logger, health HealthRoutes, eva
 	r.Get("/health", health.Health)
 	r.With(middleware.RateLimitPerIP(cfg.RateLimitPerIPRPM)).
 		Post("/v1/evaluations", eval.Evaluate)
+	r.With(middleware.RateLimitPerIP(cfg.RateLimitRevisionsPerIPRPM)).
+		Post("/v1/revisions", rev.Revise)
 
 	return r
 }

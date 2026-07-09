@@ -17,6 +17,7 @@ import (
 	apihttp "github.com/sriganeshlokesh/forged/api/http"
 	"github.com/sriganeshlokesh/forged/api/http/handle"
 	"github.com/sriganeshlokesh/forged/application/evaluation"
+	"github.com/sriganeshlokesh/forged/application/revision"
 	"github.com/sriganeshlokesh/forged/config"
 )
 
@@ -25,13 +26,18 @@ import (
 var ServerSet = wire.NewSet(
 	handle.NewHealthHandler,
 	handle.NewEvaluationHandler,
+	handle.NewRevisionHandler,
 	evaluation.NewUseCase,
+	revision.NewUseCase,
 	ProvideEvaluator,
+	ProvideReviser,
 	apihttp.NewRouter,
 	apihttp.NewServer,
 	wire.Bind(new(handle.EvaluationUseCase), new(*evaluation.UseCase)),
+	wire.Bind(new(handle.RevisionUseCase), new(*revision.UseCase)),
 	wire.Bind(new(apihttp.HealthRoutes), new(*handle.HealthHandler)),
 	wire.Bind(new(apihttp.EvaluationRoutes), new(*handle.EvaluationHandler)),
+	wire.Bind(new(apihttp.RevisionRoutes), new(*handle.RevisionHandler)),
 )
 
 // InitializeServer is the wire injector that builds the complete *http.Server.
